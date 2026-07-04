@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>TAGRO OS Core</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  html, body { margin:0; padding:0; width:100%; height:100%; background:#121212; overflow:hidden; font-family:-apple-system,sans-serif; }
+  #view-frame { border:none; width:100%; height:100%; background:#f0ede8; }
+  #toast { position:fixed; top:20px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.9); color:#fff; padding:12px 24px; border-radius:30px; font-size:14px; z-index:99999; display:none; }
+</style>
+</head>
+<body>
+<div id="toast"></div>
+<iframe id="view-frame" src="launcher.html"></iframe>
+<script src="js/registry.js"></script>
+<script src="js/identity.js"></script>
+<script src="js/timeline-query.js"></script>
+<script src="js/event-factory.js"></script>
+<script src="js/policy-engine.js"></script>
+<script src="js/guardian.js"></script>
+<script src="js/observatory.js"></script>
+<script src="js/intelligence.js"></script>
+<script src="js/os-core.js"></script>
+<script>
+  window.TAGRO_MANIFEST = { api: 'https://tagro-api.icy-fire-d2ac.workers.dev' };
+  window.Session = { get: () => ({ name: 'Thomas Mathew Thumpassery', branch: 'TAGRO_ANCL', role: 'OPERATOR' }) };
+  window.Jobs = {
+    _cache: [],
+    find: function(id) { return this._cache.find(j => j.id === id || j.workOrder === id); },
+    syncLocalCache: function(job) {
+      const idx = this._cache.findIndex(j => j.id === job.id);
+      if (idx >= 0) this._cache[idx] = job; else this._cache.push(job);
+      this.broadcast();
+    },
+    broadcast: function() {
+      try { document.getElementById('view-frame').contentWindow.onJobsSynchronized?.(this._cache); } catch(e){}
+    }
+  };
+  window.AppLauncher = { open: (appId, jobId = '') => { document.getElementById('view-frame').src = appId === 'launcher' ? 'launcher.html' : 'app-' + appId + '.html?jobId=' + jobId; } };
+  window.Toast = { show: (m) => { const t = document.getElementById('toast'); t.textContent = m; t.style.display = 'block'; setTimeout(() => t.style.display='none', 3000); } };
+  async function sync() {
+    try { const r = await fetch(window.TAGRO_MANIFEST.api + '/api/jobs'); if (r.ok) window.Jobs._cache = await r.json(); window.Jobs.broadcast(); } catch(e){}
+  }
+  window.addEventListener('DOMContentLoaded', () => { sync(); setInterval(sync, 10000); });
+</script>
+</body>
+</html>

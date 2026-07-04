@@ -1,0 +1,27 @@
+node_modules/
+.wrangler/
+.wrangler-config/
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+
+# Production exports and generated catalog artifacts can contain business data.
+backups/*
+!backups/.gitkeep
+output/
+tmp/
+rollback/
+
+# Local test and tool output.
+*.log
+.po-test*
+.repair-test*
+*.sqlite
+*.sqlite3
+*.db
+
+# Operating-system files.
+.DS_Store
+Thumbs.db
+

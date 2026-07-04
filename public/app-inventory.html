@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>Spare Parts</title>
+<style>
+  body { font-family:-apple-system,sans-serif; background:#f0ede8; padding:16px; margin:0; }
+  .card { background:#fff; padding:16px; border-radius:12px; margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.04); }
+  .btn { width:100%; padding:13px; background:#df6427; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer; }
+  .item { background:#fafafa; border:1px solid #ddd; padding:10px; border-radius:6px; font-size:13px; margin-bottom:6px; display:flex; justify-content:space-between; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>Logistics Matrix Allocation</h2>
+  <div id="list"></div>
+  <button class="btn" style="margin-top:10px; background:#166534;" onclick="procure('parts_requested')">Submit Parts Request</button>
+  <button class="btn" style="margin-top:6px; background:#0369a1;" onclick="procure('parts_arrived')">Confirm Package Arrival</button>
+</div>
+<div style="display:flex; gap:10px;">
+  <button class="btn" style="background:#6b7280; flex:1;" onclick="parent.AppLauncher.open('launcher')">← Dashboard</button>
+  <button class="btn" style="background:#4b5563; flex:1;" onclick="parent.AppLauncher.open('billing', id)">Cash Desk ➔</button>
+</div>
+<script>
+  let id = new URLSearchParams(window.location.search).get('jobId');
+  window.addEventListener('DOMContentLoaded', load);
+  function load() {
+    const j = parent.Jobs.find(id); if(!j) return;
+    const est = parent.TAGRO_CORE.TimelineQuery.getActiveEstimate(j);
+    const map = parent.TAGRO_CORE.TimelineQuery.getJobPartsStatusMap(j) || {};
+    const l = document.getElementById('list');
+    const items = est?.estimateSummary?.partsItems || [];
+    if(items.length===0) { l.innerHTML='<i>No components mapped inside query profile.</i>'; return; }
+    l.innerHTML = items.map(i => {
+      const code = i.partNo || 'UNCODED'; const track = map[code] || { status: 'SHELF_STOCKED' };
+      return `<div class="item"><span><b>${i.description}</b> (${code})</span><span style="color:#df6427; font-weight:bold;">${track.status}</span></div>`;
+    }).join('');
+  }
+  async function procure(type) {
+    const p = parent.TAGRO_CORE.EventFactory.build({id}, type, { partNumbers: ['4130-120-0603'] }, parent.Session.get());
+    try { await parent.TAGRO_CORE.persist(id, p, parent.Session.get(), 'app-inventory'); load(); } catch(e){ parent.Toast.show(e.message); }
+  }
+  function onJobsSynchronized() { load(); }
+</script>
+</body>
+</html>

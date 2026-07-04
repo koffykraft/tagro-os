@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>Receive Machine — TAGRO</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="os-shell.css">
+  <link rel="stylesheet" href="service.css">
+</head>
+<body>
+  <header class="service-header"></header>
+  <main class="service-main">
+    <div class="screen-bar">
+      <a class="back-link" href="index.html" aria-label="Back">←</a>
+      <div class="screen-bar-main">
+        <div class="screen-title" id="screen-title">Receive machine</div>
+        <div class="save-state" id="screen-subtitle">Start anywhere. Nothing below is compulsory.</div>
+      </div>
+    </div>
+    <form id="work-order-form">
+      <div class="work-grid">
+        <section class="work-panel">
+          <div class="panel-head"><span class="panel-number">1</span><span class="panel-title">Customer</span><span class="panel-hint">Optional now</span></div>
+          <div class="panel-body">
+            <div class="search-wrap">
+              <label class="quiet" for="customer-search">Find a previous customer</label>
+              <input class="control" id="customer-search" autocomplete="off" placeholder="Phone, name or place">
+              <div class="search-results hidden" id="customer-results"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label for="customer-name">Name</label><input class="control" id="customer-name" placeholder="Can be added later"></div>
+              <div class="field"><label for="customer-phone">Phone</label><input class="control" id="customer-phone" inputmode="tel" placeholder="Can be added later"></div>
+            </div>
+            <div class="field"><label for="customer-place">Place</label><input class="control" id="customer-place" placeholder="Village, town or address"></div>
+          </div>
+        </section>
+
+        <section class="work-panel">
+          <div class="panel-head"><span class="panel-number">2</span><span class="panel-title">Machine</span><span class="panel-hint">Describe it naturally</span></div>
+          <div class="panel-body">
+            <div id="known-machines"></div>
+            <div class="field"><label for="machine-description">Machine</label><input class="control" id="machine-description" placeholder="Example: STIHL MS 250 chainsaw"></div>
+            <div class="field"><label for="machine-serial">Serial number</label><input class="control" id="machine-serial" placeholder="If visible"></div>
+            <div class="field"><label>Accessories received</label><div class="chip-row">
+              <button type="button" class="choice-chip" data-accessory="Guide bar">Guide bar</button>
+              <button type="button" class="choice-chip" data-accessory="Chain">Chain</button>
+              <button type="button" class="choice-chip" data-accessory="Battery">Battery</button>
+              <button type="button" class="choice-chip" data-accessory="Charger">Charger</button>
+              <button type="button" class="choice-chip" data-accessory="Loose parts">Loose parts</button>
+            </div></div>
+          </div>
+        </section>
+
+        <section class="work-panel full">
+          <div class="panel-head"><span class="panel-number">3</span><span class="panel-title">Complaint</span><span class="panel-hint">Customer's words only</span></div>
+          <div class="panel-body">
+            <div class="chip-row complaint-choices" aria-label="Common complaints">
+              <button type="button" class="choice-chip" data-complaint="Won't Start">Won't Start</button>
+              <button type="button" class="choice-chip" data-complaint="No Power">No Power</button>
+              <button type="button" class="choice-chip" data-complaint="Chain Problem">Chain Problem</button>
+              <button type="button" class="choice-chip" data-complaint="Fuel Leak">Fuel Leak</button>
+              <button type="button" class="choice-chip" data-complaint="Engine Noise">Engine Noise</button>
+              <button type="button" class="choice-chip" data-complaint="Service">Service</button>
+              <button type="button" class="choice-chip" data-complaint="Other">Other</button>
+            </div>
+            <div class="field-row">
+              <div class="field"><label for="complaint">What does the customer say is wrong?</label><textarea class="control" id="complaint" placeholder="Choose above or type the customer's own words"></textarea></div>
+              <div class="field post-accept-field"><label for="observation">Workshop observation</label><textarea class="control" id="observation" placeholder="What reception or the mechanic notices"></textarea></div>
+            </div>
+            <div class="field post-accept-field"><label for="work-done">Work done</label><textarea class="control" id="work-done" placeholder="Can remain blank until repair begins"></textarea></div>
+            <div class="post-accept-field"><div class="section-head"><h2>Parts, if any</h2><button class="secondary-button" id="add-part" type="button">＋ Add part</button></div>
+            <div class="part-list" id="part-list"></div></div>
+          </div>
+        </section>
+
+        <section class="work-panel full post-accept-field">
+          <div class="panel-head"><span class="panel-number">4</span><span class="panel-title">Billing information</span><span class="panel-hint">Optional and manual</span></div>
+          <div class="panel-body">
+            <div class="field-row">
+              <div class="field"><label for="billing-subtotal">Subtotal</label><input class="control" id="billing-subtotal" type="number" min="0" step=".01" placeholder="Blank"></div>
+              <div class="field"><label for="billing-tax">GST / tax</label><input class="control" id="billing-tax" type="number" min="0" step=".01" placeholder="Blank"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label for="billing-total">Billing total</label><input class="control" id="billing-total" type="number" min="0" step=".01" placeholder="Blank"></div>
+              <div class="field"><label for="billing-note">Billing note</label><input class="control" id="billing-note" placeholder="Anything the billing staff should know"></div>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="form-footer">
+        <span class="save-state" id="save-state">Accept first. Inspection, parts and billing come later.</span>
+        <button class="primary-button" id="accept-machine" type="submit">Accept machine</button>
+      </div>
+    </form>
+  </main>
+  <script src="os-manifest.js"></script><script src="os-core.js"></script><script src="service-core.js"></script>
+  <script>
+  (async()=>{
+    const session=await ServiceUI.session();if(!session)return;ServiceUI.header(session);
+    const id=new URLSearchParams(location.search).get('id'),mode=id?'edit':'new';
+    document.querySelectorAll('.post-accept-field').forEach(node=>node.hidden=true);
+    if(mode==='edit'){
+      document.title='Work Order — TAGRO';
+      document.getElementById('accept-machine').textContent='Save now';
+    }
+    await WorkOrderForm.mount({mode,id,session});
+  })()
+  </script>
+</body>
+</html>

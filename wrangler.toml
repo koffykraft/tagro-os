@@ -1,0 +1,46 @@
+name = "tagro-os-core"
+main = "src/worker.js"
+compatibility_date = "2026-07-02"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+
+[assets]
+directory = "./tagros"
+binding = "ASSETS"
+
+[[routes]]
+pattern = "os.tagro.in"
+custom_domain = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tagro-os"
+database_id = "4f53e926-c25c-4279-aa14-8ca759a4ed4a"
+migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "CATALOG_KV"
+id = "3a0fd40900114bb1861163a861dcf7e1"
+remote = true
+
+[[r2_buckets]]
+binding = "MANUALS"
+bucket_name = "tagro-manuals"
+remote = true
+
+[[r2_buckets]]
+binding = "DOCS"
+bucket_name = "tagro-docs"
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.01

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff"><title>Staff — TAGRO OS</title>
+<link rel="stylesheet" href="os-shell.css"><script src="os-manifest.js"></script><script src="os-core.js"></script>
+</head>
+<body>
+<header class="app-topbar"><a class="back-button" href="index.html" aria-label="Back to applications">‹</a><div class="app-topbar-title"><strong>Staff</strong><span id="branch-label">Accounts and access</span></div><a class="brand-logo" href="index.html"><img src="tagro-logo.png" alt="TAGRO"></a></header>
+<main class="app-workspace">
+  <section class="page-heading"><div><p class="eyebrow">People and permissions</p><h1>The right access, clearly.</h1><p>Create staff logins, assign branches and roles, and reset PINs securely.</p></div><button class="secondary-button orange" id="new-staff" type="button">+ New staff account</button></section>
+  <section class="search-panel"><div class="catalog-toolbar">
+    <input class="control" id="staff-search" type="search" placeholder="Search name, employee code, phone or branch">
+    <select class="control" id="role-filter" style="max-width:170px"><option value="all">All roles</option><option value="owner">Owners</option><option value="manager">Managers</option><option value="staff">Staff</option></select>
+    <select class="control" id="active-filter" style="max-width:170px"><option value="active">Active accounts</option><option value="all">All accounts</option><option value="inactive">Inactive accounts</option></select>
+  </div></section>
+  <section class="staff-summary" id="staff-summary"></section>
+  <section class="panel" style="margin-top:16px">
+    <div class="panel-head"><h2>Staff accounts</h2><span id="staff-count" style="color:var(--muted);font-size:11px"></span></div>
+    <div class="panel-body"><div class="staff-grid" id="staff-grid"></div><div class="empty-state hidden" id="staff-empty"><div class="empty-state-icon">◇</div><strong>No staff accounts found</strong><p>Adjust the filters or create a new account.</p></div></div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<div class="modal-backdrop hidden" id="staff-modal"><section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="staff-modal-title" style="width:min(100%,680px)">
+  <div class="modal-head"><h2 id="staff-modal-title">New staff account</h2><button class="modal-close" data-close type="button">×</button></div>
+  <form class="modal-body" id="staff-form">
+    <input type="hidden" id="staff-id">
+    <div class="security-banner"><span>●</span><div><strong>Private staff access</strong><p>PINs are protected before storage and are never displayed again.</p></div></div>
+    <div class="form-grid">
+      <div class="field"><label for="staff-name">Staff name *</label><input class="control" id="staff-name" maxlength="120" required autocomplete="name"></div>
+      <div class="field"><label for="employee-code">Employee code</label><input class="control" id="employee-code" maxlength="40" placeholder="Auto-generated if blank"></div>
+      <div class="field"><label for="staff-phone">Phone</label><input class="control" id="staff-phone" type="tel" maxlength="20" autocomplete="tel"></div>
+      <div class="field"><label for="staff-email">Email</label><input class="control" id="staff-email" type="email" maxlength="180" autocomplete="email"></div>
+      <div class="field"><label for="staff-branch">Branch *</label><select class="control" id="staff-branch" required></select></div>
+      <div class="field"><label for="staff-role">Role *</label><select class="control" id="staff-role" required><option value="staff">Staff</option><option value="manager">Manager</option><option value="owner">Owner</option></select></div>
+      <div class="field full"><label for="staff-pin" id="pin-label">Login PIN *</label><input class="control" id="staff-pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" autocomplete="new-password" placeholder="4–8 digits"></div>
+      <div class="field full hidden" id="active-field"><label class="checkbox-row"><input id="staff-active" type="checkbox" checked><span><strong>Account active</strong><span>Inactive accounts cannot log in.</span></span></label></div>
+    </div>
+    <div class="assistant-box hidden" id="self-note">Your own branch, role and active status are protected to prevent accidental lockout.</div>
+    <div class="form-actions" style="margin-top:13px"><button class="secondary-button" data-close type="button">Cancel</button><button class="primary-button save-button" id="save-staff" type="submit">Create account</button></div>
+    <div class="inline-message" id="staff-message"></div>
+  </form>
+</section></div>
+
+<script>
+let session=null,staff=[],branches=[],editing=null;
+const grid=document.getElementById('staff-grid'),empty=document.getElementById('staff-empty'),modal=document.getElementById('staff-modal');
+window.addEventListener('DOMContentLoaded',boot);
+async function boot(){
+  session=await Session.restore();if(!session){location.replace('login.html');return}
+  if(!['manager','owner'].includes(String(session.role).toLowerCase())){location.replace('index.html');return}
+  document.getElementById('branch-label').textContent=session.branchName;
+  await Promise.all([loadBranches(),loadStaff()]);
+}
+async function loadBranches(){
+  try{const data=await Api.request('/branches');branches=(data.branches||[]).filter(branch=>branch.active);renderBranchOptions()}catch(error){Toast.show(error.message)}
+}
+async function loadStaff(){
+  grid.innerHTML='<div class="empty-state"><strong>Loading staff accounts…</strong></div>';
+  try{const data=await Api.request('/staff');staff=data.staff||[];render()}catch(error){grid.innerHTML='';empty.classList.remove('hidden');empty.querySelector('strong').textContent='Unable to load staff';empty.querySelector('p').textContent=error.message}
+}
+function render(){
+  const term=value('staff-search').toLowerCase(),role=value('role-filter'),active=value('active-filter');
+  const visible=staff.filter(person=>{
+    const text=[person.name,person.employee_code,person.phone,person.email,person.branch_code,person.branch_name].join(' ').toLowerCase();
+    return(!term||text.includes(term))&&(role==='all'||person.role===role)&&(active==='all'||(active==='active'&&person.active)||(active==='inactive'&&!person.active));
+  });
+  grid.innerHTML='';empty.classList.toggle('hidden',visible.length>0);document.getElementById('staff-count').textContent=visible.length+' account'+(visible.length===1?'':'s');
+  const counts={owner:0,manager:0,staff:0,inactive:0};for(const person of staff){if(person.active)counts[person.role]=(counts[person.role]||0)+1;else counts.inactive++}
+  document.getElementById('staff-summary').innerHTML=summary('Owners',counts.owner,'Full access')+summary('Managers',counts.manager,'Branch control')+summary('Staff',counts.staff,'Daily work')+summary('Inactive',counts.inactive,'Login blocked');
+  for(const person of visible){
+    const canEdit=String(session.role).toLowerCase()==='owner'||(person.role==='staff'&&person.branch_id===session.branchId);
+    const card=document.createElement('article');card.className='staff-card'+(!person.active?' inactive':'');
+    card.innerHTML='<div class="staff-card-top"><span class="staff-avatar">'+OS.esc(initials(person.name))+'</span><div><strong>'+OS.esc(person.name)+'</strong><span>'+OS.esc(person.employee_code||'No employee code')+'</span></div><span class="role-pill role-'+OS.esc(person.role)+'">'+OS.esc(title(person.role))+'</span></div><div class="staff-meta"><span>'+OS.esc(person.branch_code+' · '+person.branch_name)+'</span><span>'+OS.esc(person.phone||person.email||'No contact recorded')+'</span></div><div class="staff-card-foot"><span class="'+(person.active?'verified-flag':'review-flag')+'">'+(person.active?'Active':'Inactive')+'</span><span>'+(person.has_pin?'PIN ready':'PIN missing')+'</span></div>';
+    if(canEdit){card.classList.add('editable');card.addEventListener('click',()=>openForm(person))}
+    grid.appendChild(card);
+  }
+}
+function openForm(person=null){
+  editing=person;document.getElementById('staff-form').reset();document.getElementById('staff-modal-title').textContent=person?'Edit staff account':'New staff account';set('staff-id',person?.id||'');set('staff-name',person?.name||'');set('employee-code',person?.employee_code||'');set('staff-phone',person?.phone||'');set('staff-email',person?.email||'');renderBranchOptions(person?.branch_id||session.branchId);set('staff-role',person?.role||'staff');set('staff-pin','');document.getElementById('staff-active').checked=person?Boolean(person.active):true;
+  const isOwner=String(session.role).toLowerCase()==='owner',isSelf=person?.id===session.id;
+  document.getElementById('staff-role').disabled=!isOwner||isSelf;document.getElementById('staff-branch').disabled=!isOwner||isSelf;
+  document.getElementById('active-field').classList.toggle('hidden',!person);document.getElementById('staff-active').disabled=isSelf;
+  document.getElementById('self-note').classList.toggle('hidden',!isSelf);
+  document.getElementById('pin-label').textContent=person?'New login PIN (leave blank to keep current)':'Login PIN *';
+  document.getElementById('staff-pin').required=!person;document.getElementById('save-staff').textContent=person?'Save changes':'Create account';document.getElementById('staff-message').textContent='';modal.classList.remove('hidden');document.getElementById('staff-name').focus();
+}
+function renderBranchOptions(selected=session?.branchId){
+  const select=document.getElementById('staff-branch');if(!select)return;
+  select.innerHTML=branches.map(branch=>'<option value="'+OS.esc(branch.id)+'"'+(branch.id===selected?' selected':'')+'>'+OS.esc(branch.code+' · '+branch.name)+'</option>').join('');
+}
+document.getElementById('staff-form').addEventListener('submit',async event=>{
+  event.preventDefault();const id=value('staff-id'),button=document.getElementById('save-staff'),message=document.getElementById('staff-message');
+  const payload={name:value('staff-name'),employeeCode:value('employee-code'),phone:value('staff-phone'),email:value('staff-email'),branchId:value('staff-branch')||editing?.branch_id||session.branchId,role:value('staff-role')||editing?.role||'staff',pin:value('staff-pin'),active:document.getElementById('staff-active').checked};
+  button.disabled=true;message.textContent=id?'Saving account securely…':'Protecting PIN and creating account…';
+  try{await Api.request(id?'/staff/'+encodeURIComponent(id):'/staff',{method:id?'PUT':'POST',body:JSON.stringify(payload)});closeModal();Toast.show(id?'Staff account updated.':'Staff account created.');await loadStaff()}catch(error){message.textContent=error.message}finally{button.disabled=false}
+});
+document.getElementById('new-staff').addEventListener('click',()=>openForm());document.querySelectorAll('[data-close]').forEach(button=>button.addEventListener('click',closeModal));
+['staff-search','role-filter','active-filter'].forEach(id=>document.getElementById(id).addEventListener(id==='staff-search'?'input':'change',render));
+function closeModal(){modal.classList.add('hidden')}function value(id){return document.getElementById(id)?.value.trim()||''}function set(id,v){document.getElementById(id).value=v}
+function initials(name){return String(name||'?').trim().split(/\s+/).slice(0,2).map(part=>part[0]).join('').toUpperCase()}function title(value){return String(value||'').replace(/\b\w/g,letter=>letter.toUpperCase())}function summary(label,count,note){return '<article><strong>'+count+'</strong><span>'+OS.esc(label)+'</span><small>'+OS.esc(note)+'</small></article>'}
+</script>
+</body>
+</html>

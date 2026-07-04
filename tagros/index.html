@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>TAGRO Service</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="os-shell.css">
+  <link rel="stylesheet" href="service.css">
+</head>
+<body>
+  <header class="service-header"></header>
+  <main class="service-main">
+    <div class="home-head">
+      <div>
+        <p class="eyebrow">Workshop</p>
+        <h1 id="greeting">Good work starts here.</h1>
+        <p class="lead" id="branch-line">Loading today’s workshop…</p>
+      </div>
+      <a class="link-button" href="app-jobs.html">Search all jobs</a>
+    </div>
+
+    <section class="primary-actions" aria-label="Workshop actions">
+      <a class="action-card primary" href="receive.html">
+        <span class="action-icon">＋</span>
+        <span><span class="action-title">Receive machine</span><span class="action-sub">Open one simple work order. Complete details whenever they become known.</span></span>
+      </a>
+      <a class="action-card" href="bench.html">
+        <span class="count-badge" id="bench-count">0</span>
+        <span class="action-icon">🔧</span>
+        <span><span class="action-title">My bench</span><span class="action-sub">Machines currently assigned to me.</span></span>
+      </a>
+      <a class="action-card" href="app-jobs.html">
+        <span class="count-badge" id="open-count">0</span>
+        <span class="action-icon">☰</span>
+        <span><span class="action-title">All jobs</span><span class="action-sub">Find any customer, machine or work order.</span></span>
+      </a>
+    </section>
+
+    <div class="section-head">
+      <h2>Continue work</h2>
+      <span class="quiet">Most recently changed</span>
+    </div>
+    <div class="job-list" id="continue-list">
+      <div class="empty">Loading work orders…</div>
+    </div>
+
+    <div class="section-head"><h2>Workshop tools</h2></div>
+    <section class="role-tools">
+      <a class="tool-card" href="app-jobs.html?status=waiting_parts">📦 Parts needed</a>
+      <a class="tool-card" href="app-reports.html">📊 Reports</a>
+      <a class="tool-card" href="app-catalog.html">🔩 Parts master</a>
+      <a class="tool-card" href="app-purchase-orders.html">Purchase orders</a>
+    </section>
+  </main>
+  <script src="os-manifest.js"></script>
+  <script src="os-core.js"></script>
+  <script src="service-core.js"></script>
+  <script>
+  (async()=>{
+    const session=await ServiceUI.session();if(!session)return;ServiceUI.header(session);
+    const hour=new Date().getHours(),word=hour<12?'Good morning':hour<17?'Good afternoon':'Good evening';
+    document.getElementById('greeting').textContent=word+', '+String(session.name||'').split(' ')[0]+'.';
+    document.getElementById('branch-line').textContent=(session.branchName||session.branch)+' · See what needs attention without hunting through menus.';
+    try{
+      const [allData,mineData]=await Promise.all([
+        Api.request('/work-orders?limit=160'),
+        Api.request('/work-orders?mine=1&limit=160')
+      ]);
+      const orders=allData.workOrders||[],mine=mineData.workOrders||[];
+      document.getElementById('open-count').textContent=orders.filter(order=>!['delivered','cancelled'].includes(order.status)).length;
+      document.getElementById('bench-count').textContent=mine.filter(order=>!['delivered','cancelled'].includes(order.status)).length;
+      const recent=orders.filter(order=>!['delivered','cancelled'].includes(order.status)).slice(0,6);
+      document.getElementById('continue-list').innerHTML=recent.length?recent.map(order=>ServiceUI.jobCard(order)).join(''):'<div class="empty">No active jobs. Receive a machine when the next one arrives.</div>';
+    }catch(error){document.getElementById('continue-list').innerHTML='<div class="empty">'+ServiceUI.esc(error.message)+'</div>'}
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>TAGRO Shell</title>
+<style>
+  body { font-family:-apple-system,sans-serif; background:#f0ede8; padding:20px; color:#121212; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:16px; margin-top:20px; }
+  .card { background:#fff; border-radius:16px; padding:20px; text-align:center; cursor:pointer; font-weight:bold; box-shadow:0 2px 5px rgba(0,0,0,0.05); }
+  .card:active { transform:scale(0.95); }
+</style>
+</head>
+<body>
+<h1 style="color:#df6427; margin:0;">TAGRO OS Workspace</h1>
+<div style="font-size:13px; color:#6b7280; font-weight:600; margin-top:4px;" id="lbl-user">Terminal Asset Configuration Counter</div>
+<div class="grid">
+  <div class="card" onclick="parent.AppLauncher.open('jobs')">📁 Jobs Registry</div>
+  <div class="card" onclick="parent.AppLauncher.open('inspection')">🔧 Teardown</div>
+  <div class="card" onclick="parent.AppLauncher.open('estimate')">📊 Quotations</div>
+  <div class="card" onclick="parent.AppLauncher.open('approval')">📋 Authorizations</div>
+  <div class="card" onclick="parent.AppLauncher.open('work')">⚡ Workbench</div>
+  <div class="card" onclick="parent.AppLauncher.open('inventory')">📦 Spare Parts</div>
+  <div class="card" onclick="parent.AppLauncher.open('billing')">💳 Cash Desk</div>
+</div>
+<script>
+  window.addEventListener('DOMContentLoaded', () => {
+    const s = parent.Session?.get(); if (s) document.getElementById('lbl-user').textContent = s.name + ' @ ' + s.branch;
+  });
+  function onJobsSynchronized() {}
+</script>
+</body>
+</html>

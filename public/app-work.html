@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>Workbench</title>
+<style>
+  body { font-family:-apple-system,sans-serif; background:#f0ede8; padding:16px; margin:0; }
+  .card { background:#fff; padding:16px; border-radius:12px; margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.04); }
+  .btn { width:100%; padding:13px; background:#df6427; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer; margin-bottom:6px; }
+  .status { font-size:13px; padding:10px; border-radius:6px; background:#f3f4f6; margin-bottom:12px; font-weight:600; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>Active Progress Tracking</h2>
+  <div id="status-box" class="status">Reconstructing stage...</div>
+  <div id="panel-controls">
+    <button class="btn" id="btn-start" style="display:none;" onclick="trigger('repair_started')">Start Repair Loop</button>
+    <button class="btn" id="btn-pause" style="display:none; background:#b91c1c;" onclick="trigger('repair_paused')">Log Temporary Stall</button>
+    <button class="btn" id="btn-resume" style="display:none; background:#6366f1;" onclick="trigger('repair_resumed')">Resume Assembly Tasks</button>
+    <button class="btn" id="btn-complete" style="display:none; background:#166534;" onclick="trigger('repair_completed')">Mark Mechanical Completion</button>
+  </div>
+</div>
+<div style="display:flex; gap:10px;">
+  <button class="btn" style="background:#6b7280; flex:1;" onclick="parent.AppLauncher.open('launcher')">← Dashboard</button>
+  <button class="btn" style="background:#4b5563; flex:1;" onclick="parent.AppLauncher.open('inventory', id)">Spare Parts ➔</button>
+</div>
+<script>
+  let id = new URLSearchParams(window.location.search).get('jobId');
+  window.addEventListener('DOMContentLoaded', load);
+  function load() {
+    const j = parent.Jobs.find(id); if(!j) return;
+    let s = { stage: 'QUEUED' };
+    try { s = parent.TAGRO_CORE.TimelineQuery.getLatestRepairStage(j); } catch(e){}
+    const box = document.getElementById('status-box');
+    document.getElementById('btn-start').style.display='none';
+    document.getElementById('btn-pause').style.display='none';
+    document.getElementById('btn-resume').style.display='none';
+    document.getElementById('btn-complete').style.display='none';
+    if(s.stage==='QUEUED') { box.textContent='Awaiting Repair Commencement'; document.getElementById('btn-start').style.display='block'; }
+    else if(s.stage==='ACTIVE') { box.textContent='Status: Active Repair ('+s.technician+')'; document.getElementById('btn-pause').style.display='block'; document.getElementById('btn-complete').style.display='block'; }
+    else if(s.stage==='STALLED') { box.textContent='Status: Suspended ('+s.reason+')'; document.getElementById('btn-resume').style.display='block'; }
+    else if(s.stage==='COMPLETED') { box.textContent='Status: Mechanical Resolution Verified.'; }
+  }
+  async function trigger(type) {
+    const j = parent.Jobs.find(id);
+    const form = { technician: 'Thomas Mathew Thumpassery', reason: 'Awaiting Parts Procurement', note: 'Handled counter request.' };
+    const p = parent.TAGRO_CORE.EventFactory.build(j, type, form, parent.Session.get());
+    try { await parent.TAGRO_CORE.persist(id, p, parent.Session.get(), 'app-work'); load(); } catch(e){ parent.Toast.show(e.message); }
+  }
+  function onJobsSynchronized() { load(); }
+</script>
+</body>
+</html>

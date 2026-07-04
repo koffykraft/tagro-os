@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Customers — TAGRO OS</title>
+<link rel="stylesheet" href="os-shell.css">
+<script src="os-manifest.js"></script>
+<script src="os-core.js"></script>
+</head>
+<body>
+<header class="app-topbar">
+  <a class="back-button" href="index.html" aria-label="Back to applications">‹</a>
+  <div class="app-topbar-title"><strong>Customers</strong><span id="branch-label">TAGRO OS</span></div>
+  <a class="brand-logo" href="index.html"><img src="tagro-logo.png" alt="TAGRO"></a>
+</header>
+
+<main class="app-workspace">
+  <section class="page-heading">
+    <div><p class="eyebrow">Customer data</p><h1>Know the customer.</h1><p>Search before creating. Keep contact and service history connected.</p></div>
+    <button class="secondary-button orange" id="new-customer" type="button">+ New customer</button>
+  </section>
+
+  <section class="search-panel">
+    <label class="field" style="margin:0" for="customer-search">
+      <span style="display:block;margin-bottom:7px;color:#57534e;font-size:11px;font-weight:950;letter-spacing:.9px;text-transform:uppercase">Search customers</span>
+      <span class="search-row">
+        <input class="control search-input" id="customer-search" type="search" placeholder="Name, phone number or customer code" autocomplete="off">
+        <button class="secondary-button" id="search-button" type="button">Search</button>
+      </span>
+    </label>
+  </section>
+
+  <div class="customer-layout">
+    <section class="panel">
+      <div class="panel-head"><h2 id="list-title">Recent customers</h2><button class="text-button" id="refresh-button" type="button">Refresh</button></div>
+      <div class="panel-body">
+        <div class="customer-list" id="customer-list"></div>
+        <div class="empty-state hidden" id="list-empty"><div class="empty-state-icon">◎</div><strong>No customers found</strong><p>Try a different search, or add a new customer.</p></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2 id="side-title">Customer details</h2></div>
+      <div class="panel-body">
+        <div class="empty-state" id="detail-empty"><div class="empty-state-icon">＋</div><strong>Select a customer</strong><p>Choose a result to view it, or create a new customer record.</p></div>
+
+        <div class="customer-detail hidden" id="customer-detail">
+          <span class="detail-code" id="detail-code"></span>
+          <h3 class="detail-name" id="detail-name"></h3>
+          <div class="detail-list" id="detail-list"></div>
+          <div class="customer-documents">
+            <div class="customer-documents-head"><strong>Documents</strong><span>Private customer files</span></div>
+            <div class="customer-document-list" id="customer-document-list"></div>
+          </div>
+          <div class="customer-documents hidden" id="customer-credentials">
+            <div class="customer-documents-head"><strong>Applicant portal access</strong><span>Encrypted vault</span></div>
+            <div class="customer-document-list" id="customer-credential-list"></div>
+          </div>
+          <div class="detail-actions"><button class="secondary-button orange" id="edit-button" type="button">Edit customer</button></div>
+        </div>
+
+        <form class="hidden" id="customer-form">
+          <input type="hidden" id="customer-id">
+          <div class="form-grid">
+            <div class="field"><label for="customer-type">Customer type *</label><select class="control" id="customer-type" required><option value="individual">Individual</option><option value="business">Business</option></select></div>
+            <div class="field full"><label for="customer-name">Customer name *</label><input class="control" id="customer-name" maxlength="140" required autocomplete="name"></div>
+            <div class="field"><label for="customer-phone">Phone</label><input class="control" id="customer-phone" type="tel" maxlength="30" inputmode="tel" autocomplete="tel" pattern="\+?[0-9 ()\-.]{10,30}"></div>
+            <div class="field"><label for="alternate-phone">Alternate phone</label><input class="control" id="alternate-phone" type="tel" maxlength="30" inputmode="tel" pattern="\+?[0-9 ()\-.]{10,30}"></div>
+            <div class="field full"><label for="customer-email">Email</label><input class="control" id="customer-email" type="email" maxlength="180" autocomplete="email"></div>
+            <div class="field full"><label for="customer-address">Address</label><textarea class="control" id="customer-address" maxlength="600" autocomplete="street-address"></textarea></div>
+            <div class="field full"><label for="customer-tax">GSTIN / Tax ID</label><input class="control" id="customer-tax" maxlength="30" autocapitalize="characters"></div>
+            <div class="field full"><label for="customer-notes">Notes</label><textarea class="control" id="customer-notes" maxlength="1000" placeholder="Useful preferences, aliases or service context"></textarea></div>
+            <div class="field full intake-document-heading"><strong>Customer documents</strong><span>Optional. PDF, JPEG, PNG or WebP; maximum 10 MB each.</span></div>
+            <label class="field full document-optimization-option"><span><input id="document-optimize" type="checkbox"> Prepare image files below 100 KB for SMAM DBT</span><small>Optional. Original clarity is retained when this is off. Large PDFs cannot be safely auto-reduced.</small></label>
+            <div class="field"><label for="document-aadhaar">Aadhaar</label><input class="control file-control" id="document-aadhaar" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp"></div>
+            <div class="field"><label for="document-pan">PAN</label><input class="control file-control" id="document-pan" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp"></div>
+            <div class="field"><label for="document-gst">GST certificate</label><input class="control file-control" id="document-gst" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp"></div>
+            <div class="field"><label for="document-address">Address proof</label><input class="control file-control" id="document-address" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp"></div>
+            <div class="field"><label for="document-bank">Bank Passbook / Statement</label><input class="control file-control" id="document-bank" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp"></div>
+            <div class="field"><label for="document-land-tax">Land Tax Receipt</label><input class="control file-control" id="document-land-tax" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp"></div>
+            <div class="field"><label for="document-invoice">Invoice</label><input class="control file-control" id="document-invoice" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp"></div>
+            <div class="field"><label for="document-receipt">Receipt copy</label><input class="control file-control" id="document-receipt" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp"></div>
+            <div class="field"><label for="document-handover">Handover photo</label><input class="control file-control" id="document-handover" type="file" accept=".jpg,.jpeg,.png,.webp"></div>
+            <div class="field full"><label for="document-other">Other document(s)</label><input class="control file-control" id="document-other" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp"><small>Select and add multiple files if needed.</small></div>
+            <div class="field full intake-document-heading credential-fields hidden" id="credential-heading"><strong>Applicant portal access</strong><span>Optional encrypted vault. Only managers and owners can save or reveal these details.</span></div>
+            <div class="field credential-fields hidden"><label for="credential-service">Portal / scheme</label><input class="control" id="credential-service" maxlength="100" autocomplete="off" placeholder="Example: SMAM DBT"></div>
+            <div class="field credential-fields hidden"><label for="credential-login">Login ID</label><input class="control" id="credential-login" maxlength="300" autocomplete="off"></div>
+            <div class="field full credential-fields hidden"><label for="credential-password">Password</label><input class="control" id="credential-password" type="password" maxlength="500" autocomplete="new-password"></div>
+          </div>
+          <div class="form-actions"><button class="secondary-button" id="cancel-button" type="button">Cancel</button><button class="primary-button save-button" id="save-button" type="submit">Save customer</button></div>
+          <div class="inline-message" id="form-message" role="status" aria-live="polite"></div>
+        </form>
+      </div>
+    </section>
+  </div>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+let currentSession = null;
+let selectedCustomer = null;
+let searchTimer = null;
+
+const list = document.getElementById('customer-list');
+const listEmpty = document.getElementById('list-empty');
+const searchInput = document.getElementById('customer-search');
+const form = document.getElementById('customer-form');
+const detail = document.getElementById('customer-detail');
+const detailEmpty = document.getElementById('detail-empty');
+const formMessage = document.getElementById('form-message');
+
+window.addEventListener('DOMContentLoaded', boot);
+
+async function boot() {
+  currentSession = await Session.restore();
+  if (!currentSession) { location.replace('login.html'); return; }
+  document.getElementById('branch-label').textContent = currentSession.branchName;
+  const canManageCredentials = ['manager', 'owner'].includes(String(currentSession.role || '').toLowerCase());
+  document.querySelectorAll('.credential-fields').forEach(element => element.classList.toggle('hidden', !canManageCredentials));
+  await loadCustomers('');
+}
+
+async function loadCustomers(query) {
+  setListLoading();
+  try {
+    const data = await Api.request('/customers?limit=40&query=' + encodeURIComponent(query || ''));
+    renderCustomers(data.customers || []);
+    document.getElementById('list-title').textContent = query ? 'Search results' : 'Recent customers';
+  } catch (error) {
+    list.innerHTML = '';
+    listEmpty.classList.remove('hidden');
+    listEmpty.querySelector('strong').textContent = 'Unable to load customers';
+    listEmpty.querySelector('p').textContent = error.message;
+  }
+}
+
+function setListLoading() {
+  listEmpty.classList.add('hidden');
+  list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">…</div><strong>Loading customers</strong></div>';
+}
+
+function renderCustomers(customers) {
+  list.innerHTML = '';
+  listEmpty.classList.toggle('hidden', customers.length > 0);
+  for (const customer of customers) {
+    const row = document.createElement('button');
+    row.className = 'customer-row' + (selectedCustomer?.id === customer.id ? ' selected' : '');
+    row.type = 'button';
+    row.innerHTML =
+      '<span class="customer-initial">' + OS.esc(initials(customer.name)) + '</span>' +
+      '<span class="customer-main"><strong>' + OS.esc(customer.name) + '</strong><span>' +
+      OS.esc(customer.phone || customer.email || 'No contact recorded') + '</span></span>' +
+      '<span class="customer-code">' + OS.esc(customer.customer_code) + '</span>';
+    row.addEventListener('click', () => showCustomer(customer));
+    list.appendChild(row);
+  }
+}
+
+function showCustomer(customer) {
+  selectedCustomer = customer;
+  form.classList.add('hidden');
+  detailEmpty.classList.add('hidden');
+  detail.classList.remove('hidden');
+  document.getElementById('side-title').textContent = 'Customer details';
+  document.getElementById('detail-code').textContent = customer.customer_code;
+  document.getElementById('detail-name').textContent = customer.name;
+  document.getElementById('detail-list').innerHTML = [
+    detailItem('Customer type', customer.customer_type === 'business' ? 'Business' : 'Individual'),
+    detailItem('Phone', customer.phone),
+    detailItem('Alternate phone', customer.alternate_phone),
+    detailItem('Email', customer.email),
+    detailItem('Address', customer.address),
+    detailItem('GSTIN / Tax ID', customer.tax_id),
+    detailItem('Notes', customer.notes)
+  ].join('');
+  document.querySelectorAll('.customer-row').forEach(row => row.classList.toggle('selected', row.querySelector('.customer-code')?.textContent === customer.customer_code));
+  loadCustomerDocuments(customer.id);
+  loadCustomerCredentials(customer.id);
+}
+
+function detailItem(label, value) {
+  return '<div class="detail-item"><label>' + OS.esc(label) + '</label><div>' + OS.esc(value || 'Not recorded') + '</div></div>';
+}
+
+function openForm(customer = null) {
+  selectedCustomer = customer;
+  detail.classList.add('hidden');
+  detailEmpty.classList.add('hidden');
+  form.classList.remove('hidden');
+  document.getElementById('side-title').textContent = customer ? 'Edit customer' : 'New customer';
+  document.getElementById('customer-id').value = customer?.id || '';
+  document.getElementById('customer-type').value = customer?.customer_type || 'individual';
+  document.getElementById('customer-name').value = customer?.name || '';
+  document.getElementById('customer-phone').value = customer?.phone || '';
+  document.getElementById('alternate-phone').value = customer?.alternate_phone || '';
+  document.getElementById('customer-email').value = customer?.email || '';
+  document.getElementById('customer-address').value = customer?.address || '';
+  document.getElementById('customer-tax').value = customer?.tax_id || '';
+  document.getElementById('customer-notes').value = customer?.notes || '';
+  document.getElementById('credential-service').value = '';
+  document.getElementById('credential-login').value = '';
+  document.getElementById('credential-password').value = '';
+  document.querySelectorAll('.file-control').forEach(input => { input.value = ''; });
+  document.getElementById('save-button').textContent = customer ? 'Save changes' : 'Save customer';
+  formMessage.textContent = '';
+  document.getElementById('customer-name').focus();
+}
+
+function closeForm() {
+  form.classList.add('hidden');
+  if (selectedCustomer) showCustomer(selectedCustomer);
+  else detailEmpty.classList.remove('hidden');
+}
+
+form.addEventListener('submit', async event => {
+  event.preventDefault();
+  const customerId = document.getElementById('customer-id').value;
+  const payload = new FormData();
+  payload.set('customerType', document.getElementById('customer-type').value);
+  payload.set('name', document.getElementById('customer-name').value);
+  payload.set('phone', document.getElementById('customer-phone').value);
+  payload.set('alternatePhone', document.getElementById('alternate-phone').value);
+  payload.set('email', document.getElementById('customer-email').value);
+  payload.set('address', document.getElementById('customer-address').value);
+  payload.set('taxId', document.getElementById('customer-tax').value);
+  payload.set('notes', document.getElementById('customer-notes').value);
+  payload.set('credentialService', document.getElementById('credential-service').value);
+  payload.set('credentialLogin', document.getElementById('credential-login').value);
+  payload.set('credentialPassword', document.getElementById('credential-password').value);
+  const saveButton = document.getElementById('save-button');
+  saveButton.disabled = true;
+  formMessage.className = 'inline-message';
+  formMessage.textContent = 'Preparing documents…';
+  try {
+    const optimizeForDbt = document.getElementById('document-optimize').checked;
+    await appendPreparedFiles(payload, 'aadhaar', document.getElementById('document-aadhaar'), optimizeForDbt);
+    await appendPreparedFiles(payload, 'pan', document.getElementById('document-pan'), optimizeForDbt);
+    await appendPreparedFiles(payload, 'gst_certificate', document.getElementById('document-gst'), optimizeForDbt);
+    await appendPreparedFiles(payload, 'address_proof', document.getElementById('document-address'), optimizeForDbt);
+    await appendPreparedFiles(payload, 'bank_document', document.getElementById('document-bank'), optimizeForDbt);
+    await appendPreparedFiles(payload, 'land_tax_receipt', document.getElementById('document-land-tax'), optimizeForDbt);
+    await appendPreparedFiles(payload, 'sale_invoice', document.getElementById('document-invoice'), optimizeForDbt);
+    await appendPreparedFiles(payload, 'payment_receipt', document.getElementById('document-receipt'), optimizeForDbt);
+    await appendPreparedFiles(payload, 'handover_photo', document.getElementById('document-handover'), optimizeForDbt);
+    await appendPreparedFiles(payload, 'other_document', document.getElementById('document-other'), optimizeForDbt);
+    formMessage.textContent = 'Saving securely…';
+    const data = await Api.request(customerId ? '/customers/' + encodeURIComponent(customerId) : '/customers', {
+      method: customerId ? 'PUT' : 'POST',
+      body: payload
+    });
+    selectedCustomer = data.customer;
+    formMessage.className = 'inline-message success';
+    formMessage.textContent = customerId ? 'Customer updated.' : 'Customer created.';
+    Toast.show(formMessage.textContent);
+    await loadCustomers(searchInput.value.trim());
+    showCustomer(data.customer);
+  } catch (error) {
+    formMessage.textContent = error.message;
+    if (error.data?.code === 'CUSTOMER_DUPLICATE' && error.data.existingCustomer) {
+      selectedCustomer = error.data.existingCustomer;
+    }
+  } finally {
+    saveButton.disabled = false;
+  }
+});
+
+async function appendPreparedFiles(payload, field, input, optimizeForDbt) {
+  for (const file of input.files || []) {
+    if (file.size > 0) {
+      const prepared = optimizeForDbt ? await prepareDocumentForDbt(file) : file;
+      payload.append(field, prepared, prepared.name);
+    }
+  }
+}
+
+async function prepareDocumentForDbt(file) {
+  const maximumBytes = 100 * 1024;
+  if (file.size < maximumBytes) return file;
+  if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+    throw new Error(file.name + ' is larger than 100 KB. Please save it as a smaller PDF or upload clear page images.');
+  }
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    throw new Error(file.name + ' must be a PDF, JPEG, PNG or WebP file.');
+  }
+
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch {
+    throw new Error(file.name + ' could not be read as an image.');
+  }
+
+  try {
+    let scale = Math.min(1, 1800 / Math.max(bitmap.width, bitmap.height));
+    for (let resizeAttempt = 0; resizeAttempt < 7; resizeAttempt += 1) {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(700, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(700, Math.round(bitmap.height * scale));
+      const fittedScale = Math.min(canvas.width / bitmap.width, canvas.height / bitmap.height);
+      canvas.width = Math.round(bitmap.width * fittedScale);
+      canvas.height = Math.round(bitmap.height * fittedScale);
+      const context = canvas.getContext('2d', { alpha: false });
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+      for (const quality of [0.88, 0.78, 0.68, 0.58, 0.48]) {
+        const blob = await canvasToBlob(canvas, 'image/webp', quality);
+        if (blob && blob.size < maximumBytes) {
+          return new File([blob], optimizedFilename(file.name), {
+            type: 'image/webp',
+            lastModified: file.lastModified
+          });
+        }
+      }
+      scale *= 0.82;
+    }
+  } finally {
+    bitmap.close();
+  }
+
+  throw new Error(file.name + ' could not be reduced below 100 KB without becoming too small. Crop it closer to the document and try again.');
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise(resolve => canvas.toBlob(resolve, type, quality));
+}
+
+function optimizedFilename(name) {
+  return String(name || 'document').replace(/\.[^.]+$/, '') + '-dbt.webp';
+}
+
+async function loadCustomerDocuments(customerId) {
+  const target = document.getElementById('customer-document-list');
+  target.innerHTML = '<span class="document-status">Loading documents…</span>';
+  try {
+    const data = await Api.request('/customers/' + encodeURIComponent(customerId) + '/documents');
+    if (selectedCustomer?.id !== customerId) return;
+    const documents = data.documents || [];
+    if (!documents.length) {
+      target.innerHTML = '<span class="document-status">No documents uploaded.</span>';
+      return;
+    }
+    target.innerHTML = documents.map(document => {
+      const href = TAGRO_MANIFEST.api + '/customers/' + encodeURIComponent(customerId) +
+        '/documents/' + encodeURIComponent(document.id) + '/download';
+      return '<a class="customer-document-row" href="' + OS.esc(href) + '">' +
+        '<span><strong>' + OS.esc(documentTypeLabel(document.doc_type)) + '</strong>' +
+        '<small>' + OS.esc(document.original_filename) + ' · ' + OS.esc(formatBytes(document.size_bytes)) + '</small></span>' +
+        '<b>Download</b></a>';
+    }).join('');
+  } catch (error) {
+    if (selectedCustomer?.id === customerId) {
+      target.innerHTML = '<span class="document-status error">' + OS.esc(error.message) + '</span>';
+    }
+  }
+}
+
+async function loadCustomerCredentials(customerId) {
+  const section = document.getElementById('customer-credentials');
+  const target = document.getElementById('customer-credential-list');
+  const canManage = ['manager', 'owner'].includes(String(currentSession?.role || '').toLowerCase());
+  section.classList.toggle('hidden', !canManage);
+  if (!canManage) return;
+  target.innerHTML = '<span class="document-status">Loading encrypted access…</span>';
+  try {
+    const data = await Api.request('/customers/' + encodeURIComponent(customerId) + '/credentials');
+    if (selectedCustomer?.id !== customerId) return;
+    const credentials = data.credentials || [];
+    if (!credentials.length) {
+      target.innerHTML = '<span class="document-status">No applicant login saved.</span>';
+      return;
+    }
+    target.innerHTML = credentials.map(credential =>
+      '<div class="customer-document-row credential-row" data-credential-id="' + OS.esc(credential.id) + '">' +
+      '<span><strong>' + OS.esc(credential.service_label) + '</strong><small>Encrypted · saved ' +
+      OS.esc(new Date(credential.created_at).toLocaleDateString()) + '</small></span>' +
+      '<button class="text-button reveal-credential" type="button">Reveal</button></div>'
+    ).join('');
+    target.querySelectorAll('.reveal-credential').forEach(button => {
+      button.addEventListener('click', () => revealCustomerCredential(customerId, button.closest('.credential-row')));
+    });
+  } catch (error) {
+    if (selectedCustomer?.id === customerId) {
+      target.innerHTML = '<span class="document-status error">' + OS.esc(error.message) + '</span>';
+    }
+  }
+}
+
+async function revealCustomerCredential(customerId, row) {
+  const pin = window.prompt('Enter your own staff PIN to reveal this encrypted login:');
+  if (!pin) return;
+  const credentialId = row.dataset.credentialId;
+  try {
+    const data = await Api.request('/customers/' + encodeURIComponent(customerId) +
+      '/credentials/' + encodeURIComponent(credentialId) + '/reveal', {
+      method: 'POST',
+      body: JSON.stringify({ pin })
+    });
+    row.innerHTML = '<span><strong>' + OS.esc(data.credential.service_label) + '</strong>' +
+      '<small>Login ID: ' + OS.esc(data.credential.login_id) + '<br>Password: ' +
+      OS.esc(data.credential.password) + '</small></span><b>Shown for 60 seconds</b>';
+    setTimeout(() => {
+      if (selectedCustomer?.id === customerId) loadCustomerCredentials(customerId);
+    }, 60000);
+  } catch (error) {
+    Toast.show(error.message);
+  }
+}
+
+function documentTypeLabel(type) {
+  return {
+    aadhaar: 'Aadhaar',
+    pan: 'PAN',
+    gst_certificate: 'GST certificate',
+    address_proof: 'Address proof',
+    bank_document: 'Bank Passbook / Statement',
+    land_tax_receipt: 'Land Tax Receipt',
+    sale_invoice: 'Invoice',
+    payment_receipt: 'Receipt copy',
+    handover_photo: 'Handover photo',
+    other: 'Other document'
+  }[type] || 'Document';
+}
+
+function formatBytes(value) {
+  const bytes = Number(value) || 0;
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+document.getElementById('new-customer').addEventListener('click', () => openForm());
+document.getElementById('edit-button').addEventListener('click', () => openForm(selectedCustomer));
+document.getElementById('cancel-button').addEventListener('click', closeForm);
+document.getElementById('search-button').addEventListener('click', () => loadCustomers(searchInput.value.trim()));
+document.getElementById('refresh-button').addEventListener('click', () => loadCustomers(searchInput.value.trim()));
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => loadCustomers(searchInput.value.trim()), 350);
+});
+searchInput.addEventListener('keydown', event => {
+  if (event.key === 'Enter') { event.preventDefault(); loadCustomers(searchInput.value.trim()); }
+});
+
+function initials(name) {
+  return String(name || '?').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en-IN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff"><title>Repair Jobs — TAGRO OS</title>
+<link rel="stylesheet" href="os-shell.css"><script src="os-manifest.js"></script><script src="os-core.js"></script>
+</head>
+<body>
+<header class="app-topbar"><a class="back-button" href="index.html" aria-label="Back to applications">‹</a><div class="app-topbar-title"><strong>Repair Jobs</strong><span id="branch-label">Work orders and timelines</span></div><a class="brand-logo" href="index.html"><img src="tagro-logo.png" alt="TAGRO"></a></header>
+<main class="app-workspace">
+  <section class="page-heading"><div><p class="eyebrow">Service workflow</p><h1>Every machine has a story.</h1><p>Receive, inspect, repair and deliver with a complete cloud timeline.</p></div><button class="secondary-button orange" id="new-job" type="button">+ Receive machine</button></section>
+  <section class="search-panel"><div class="catalog-toolbar">
+    <input class="control" id="job-search" type="search" placeholder="Work order, customer, phone or serial number">
+    <select class="control" id="status-filter" style="max-width:210px">
+      <option value="all">All statuses</option><option value="received">Received</option><option value="inspecting">Inspecting</option>
+      <option value="awaiting_approval">Awaiting approval</option><option value="approved">Approved</option><option value="repairing">Repairing</option>
+      <option value="paused">Paused</option><option value="waiting_parts">Waiting for parts</option><option value="ready">Ready for delivery</option>
+      <option value="delivered">Delivered</option><option value="cancelled">Cancelled</option>
+    </select>
+    <button class="secondary-button" id="refresh-button" type="button">Refresh</button>
+  </div></section>
+  <div class="jobs-layout">
+    <section class="panel"><div class="panel-head"><h2>Work orders</h2><span id="job-count" style="color:var(--muted);font-size:11px"></span></div><div class="panel-body"><div class="job-list" id="job-list"></div><div class="empty-state hidden" id="job-empty"><div class="empty-state-icon">◇</div><strong>No repair jobs found</strong><p>Try another filter or receive a machine.</p></div></div></section>
+    <section class="panel job-detail-panel"><div class="panel-head"><h2>Job details</h2></div><div class="panel-body"><div class="empty-state" id="detail-empty"><div class="empty-state-icon">↗</div><strong>Select a work order</strong><p>Its current status, machine details and complete service timeline will appear here.</p></div><div class="hidden" id="job-detail"></div></div></section>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<div class="modal-backdrop hidden" id="job-modal"><section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="job-modal-title" style="width:min(100%,720px)">
+  <div class="modal-head"><h2 id="job-modal-title">Receive machine</h2><button class="modal-close" data-close="job-modal" type="button">×</button></div>
+  <form class="modal-body" id="job-form"><div class="form-grid">
+    <div class="field full"><label for="job-customer">Customer *</label><select class="control" id="job-customer" required><option value="">Loading customers…</option></select></div>
+    <div class="field full hidden" id="saved-machine-field"><label for="job-saved-machine">This customer's machines</label><select class="control" id="job-saved-machine"><option value="">New / different machine</option></select><small class="field-help" id="saved-machine-help">Choose a remembered machine to fill its details.</small></div>
+    <div class="field full hidden" id="branch-field"><label for="job-branch">Receiving branch *</label><select class="control" id="job-branch"></select></div>
+    <div class="field"><label for="job-model">Machine model</label><select class="control" id="job-model"><option value="">Unknown / not listed</option></select></div>
+    <div class="field"><label for="job-serial">Serial number</label><input class="control" id="job-serial" maxlength="120"></div>
+    <div class="field full"><label for="job-machine-description">Machine description</label><input class="control" id="job-machine-description" maxlength="160" placeholder="Example: Orange MS 250 chainsaw — leave blank if model is selected"></div>
+    <div class="field"><label for="job-urgency">Urgency *</label><select class="control" id="job-urgency"><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
+    <div class="field"><label for="other-accessory">Other accessory</label><input class="control" id="other-accessory" maxlength="100" placeholder="Optional"></div>
+    <div class="field full"><label>Accessories received</label><div class="accessory-grid" id="accessory-grid"></div></div>
+    <div class="field full"><label for="job-problem">Reported problem *</label><textarea class="control" id="job-problem" maxlength="2000" required placeholder="Describe the customer's complaint in their words"></textarea></div>
+    <div class="field full"><label for="intake-notes">Intake notes</label><textarea class="control" id="intake-notes" maxlength="1000" placeholder="Visible damage, condition or promises made"></textarea></div>
+  </div><div class="form-actions"><button class="secondary-button" data-close="job-modal" type="button">Cancel</button><button class="primary-button save-button" id="create-job-button" type="submit">Create work order</button></div><div class="inline-message" id="job-form-message"></div></form>
+</section></div>
+
+<div class="modal-backdrop hidden" id="action-modal"><section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="action-title">
+  <div class="modal-head"><h2 id="action-title">Update repair job</h2><button class="modal-close" data-close="action-modal" type="button">×</button></div>
+  <form class="modal-body" id="action-form"><input type="hidden" id="action-type"><div class="field hidden" id="estimate-field"><label for="estimate-amount">Estimate amount</label><input class="control" id="estimate-amount" type="number" min="0" step="0.01" placeholder="Optional"></div><div class="field"><label for="action-note">Note</label><textarea class="control" id="action-note" maxlength="1500" placeholder="Add useful details for the next person"></textarea></div><div class="form-actions"><button class="secondary-button" data-close="action-modal" type="button">Cancel</button><button class="primary-button save-button" id="save-action" type="submit">Save update</button></div><div class="inline-message" id="action-message"></div></form>
+</section></div>
+
+<div class="modal-backdrop hidden" id="estimate-modal"><section class="modal-card estimate-modal-card" role="dialog" aria-modal="true" aria-labelledby="estimate-title">
+  <div class="modal-head"><div><p class="eyebrow">Customer estimate</p><h2 id="estimate-title">Prepare estimate</h2></div><button class="modal-close" data-close="estimate-modal" type="button">×</button></div>
+  <form class="modal-body" id="estimate-form">
+    <div class="estimate-toolbar"><input class="control" id="estimate-search" type="search" placeholder="Find part number or item name"><button class="secondary-button orange" id="estimate-search-button" type="button">Find price</button><button class="secondary-button" id="add-estimate-row" type="button">+ Manual line</button></div>
+    <div class="estimate-search-results hidden" id="estimate-search-results"></div>
+    <div class="estimate-lines" id="estimate-lines"></div>
+    <div class="field"><label for="estimate-notes">Estimate notes</label><textarea class="control" id="estimate-notes" maxlength="1500" placeholder="Validity, exclusions or customer instructions"></textarea></div>
+    <div class="estimate-totals"><span>Subtotal <strong id="estimate-subtotal">₹0</strong></span><span>GST <strong id="estimate-tax">₹0</strong></span><span class="grand-total">Estimate total <strong id="estimate-total">₹0</strong></span></div>
+    <div class="form-actions"><button class="secondary-button orange hidden" id="share-estimate" type="button">Open WhatsApp</button><button class="secondary-button" data-close="estimate-modal" type="button">Cancel</button><button class="primary-button save-button" id="save-estimate" type="submit">Save estimate</button></div><div class="inline-message" id="estimate-message"></div>
+  </form>
+</section></div>
+
+<div class="modal-backdrop hidden" id="service-record-modal"><section class="modal-card estimate-modal-card" role="dialog" aria-modal="true" aria-labelledby="service-record-title">
+  <div class="modal-head"><div><p class="eyebrow">Actual work</p><h2 id="service-record-title">Service record</h2></div><button class="modal-close" data-close="service-record-modal" type="button">×</button></div>
+  <form class="modal-body" id="service-record-form">
+    <div class="journey-guidance"><strong>Record what actually happened.</strong><span>The estimate is copied as a starting point. Change quantities, parts and labour to match the completed work.</span></div>
+    <div class="form-grid">
+      <div class="field"><label for="service-technician">Technician *</label><select class="control" id="service-technician" required></select></div>
+      <div class="field"><label for="service-diagnosis">Diagnosis *</label><input class="control" id="service-diagnosis" maxlength="2000" placeholder="What was actually wrong?"></div>
+      <div class="field full"><label for="service-work">Work performed *</label><textarea class="control" id="service-work" maxlength="3000" placeholder="What work was actually completed?"></textarea></div>
+    </div>
+    <div class="estimate-toolbar"><input class="control" id="service-search" type="search" placeholder="Find actual part or service"><button class="secondary-button orange" id="service-search-button" type="button">Find item</button><button class="secondary-button" id="add-service-row" type="button">+ Manual line</button></div>
+    <div class="estimate-search-results hidden" id="service-search-results"></div>
+    <div class="estimate-lines" id="service-lines"></div>
+    <div class="field"><label for="service-notes">Notes for billing / next person</label><textarea class="control" id="service-notes" maxlength="1500" placeholder="Optional clarification, warranty note or recommendation"></textarea></div>
+    <div class="estimate-totals"><span>Subtotal <strong id="service-subtotal">₹0</strong></span><span>GST <strong id="service-tax">₹0</strong></span><span class="grand-total">Billing total <strong id="service-total">₹0</strong></span></div>
+    <div class="completion-warning"><strong>Complete work</strong><span>This closes the mechanical work and automatically prepares billing information. The service record then becomes read-only.</span></div>
+    <div class="form-actions"><button class="secondary-button" data-close="service-record-modal" type="button">Cancel</button><button class="secondary-button orange" id="save-service-draft" type="button">Save draft</button><button class="primary-button save-button" id="complete-service" type="submit">Complete work & prepare billing</button></div><div class="inline-message" id="service-message"></div>
+  </form>
+</section></div>
+
+<div class="modal-backdrop hidden" id="billing-modal"><section class="modal-card estimate-modal-card" role="dialog" aria-modal="true" aria-labelledby="billing-title">
+  <div class="modal-head"><div><p class="eyebrow">Billing handoff</p><h2 id="billing-title">Billing ready</h2></div><button class="modal-close" data-close="billing-modal" type="button">×</button></div>
+  <div class="modal-body" id="billing-content"></div>
+</section></div>
+
+<script>
+let session=null,jobs=[],selectedJob=null,searchTimer=null,customerMachines=[],formStaff=[];
+const accessoryNames=['Blade','Chain','Battery','Charger','Guard','Handle','Collection bag','Tool kit'];
+const eventLabels={machine_received:'Machine received',inspection_started:'Inspection started',inspection_completed:'Inspection completed',estimate_approved:'Estimate approved',repair_started:'Repair started',repair_paused:'Repair paused',repair_resumed:'Repair resumed',parts_requested:'Parts requested',parts_received:'Parts received',repair_completed:'Repair completed',customer_notified:'Customer notified',machine_delivered:'Machine delivered',job_cancelled:'Job cancelled',note_added:'Note added'};
+const actionsByStatus={
+  received:[['inspection_started','Start inspection'],['job_cancelled','Cancel job']],
+  inspecting:[['inspection_completed','Finish inspection'],['job_cancelled','Cancel job']],
+  awaiting_approval:[['estimate_approved','Approve estimate'],['job_cancelled','Cancel job']],
+  approved:[['repair_started','Start repair'],['job_cancelled','Cancel job']],
+  repairing:[['repair_paused','Pause repair'],['parts_requested','Request parts']],
+  paused:[['repair_resumed','Resume repair'],['parts_requested','Request parts'],['job_cancelled','Cancel job']],
+  waiting_parts:[['parts_received','Parts received'],['job_cancelled','Cancel job']],
+  ready:[['customer_notified','Customer notified'],['machine_delivered','Deliver machine']],delivered:[],cancelled:[]
+};
+window.addEventListener('DOMContentLoaded',boot);
+async function boot(){
+  session=await Session.restore();if(!session){location.replace('login.html');return}
+  document.getElementById('branch-label').textContent=session.branchName;
+  document.getElementById('accessory-grid').innerHTML=accessoryNames.map(name=>'<label class="checkbox-row"><input type="checkbox" name="accessory" value="'+OS.esc(name)+'"><span><strong>'+OS.esc(name)+'</strong></span></label>').join('');
+  await Promise.all([loadJobs(),loadFormOptions()]);
+}
+async function loadFormOptions(){
+  try{
+    const [customerData,machineData]=await Promise.all([Api.request('/customers?limit=100'),Api.request('/machine-catalog')]);
+    document.getElementById('job-customer').innerHTML='<option value="">Select customer</option>'+(customerData.customers||[]).map(customer=>'<option value="'+OS.esc(customer.id)+'">'+OS.esc(customer.name+(customer.phone?' · '+customer.phone:''))+'</option>').join('');
+    document.getElementById('job-model').innerHTML='<option value="">Unknown / not listed</option>'+(machineData.models||[]).map(model=>'<option value="'+OS.esc(model.id)+'">'+OS.esc(model.make_name+' '+model.model_name+' · '+model.machine_type)+'</option>').join('');
+    formStaff=[{id:session.id,name:session.name||'Current staff'}];
+    if(['manager','owner'].includes(String(session.role).toLowerCase())){
+      try{const staffData=await Api.request('/staff');formStaff=(staffData.staff||[]).filter(staff=>staff.active&&staff.branch_id===session.branchId||String(session.role).toLowerCase()==='owner'&&staff.active)}catch(error){}
+    }
+    renderTechnicianOptions();
+    if(String(session.role).toLowerCase()==='owner'){
+      const data=await Api.request('/branches');document.getElementById('branch-field').classList.remove('hidden');
+      document.getElementById('job-branch').innerHTML=(data.branches||[]).filter(branch=>branch.active).map(branch=>'<option value="'+OS.esc(branch.id)+'"'+(branch.id===session.branchId?' selected':'')+'>'+OS.esc(branch.code+' · '+branch.name)+'</option>').join('');
+    }
+  }catch(error){Toast.show(error.message)}
+}
+function renderTechnicianOptions(){
+  const options=formStaff.length?formStaff:[{id:session.id,name:session.name||'Current staff'}];
+  document.getElementById('service-technician').innerHTML=options.map(staff=>'<option value="'+OS.esc(staff.id)+'"'+(staff.id===session.id?' selected':'')+'>'+OS.esc(staff.name)+'</option>').join('');
+}
+async function loadCustomerMachines(){
+  const customerId=value('job-customer'),field=document.getElementById('saved-machine-field'),select=document.getElementById('job-saved-machine');
+  customerMachines=[];select.innerHTML='<option value="">New / different machine</option>';
+  if(!customerId){field.classList.add('hidden');return}
+  try{
+    const data=await Api.request('/customers/'+encodeURIComponent(customerId)+'/machines');customerMachines=data.machines||[];
+    if(customerMachines.length){
+      select.innerHTML='<option value="">New / different machine</option>'+customerMachines.map(machine=>'<option value="'+OS.esc(machine.id)+'">'+OS.esc(machine.display_name+(machine.serial_number?' · '+machine.serial_number:'')+(machine.repair_count?' · '+machine.repair_count+' previous job'+(Number(machine.repair_count)===1?'':'s'):''))+'</option>').join('');
+      field.classList.remove('hidden');document.getElementById('saved-machine-help').textContent=customerMachines.length+' remembered machine'+(customerMachines.length===1?'':'s')+' found.';
+    }else field.classList.add('hidden');
+  }catch(error){field.classList.add('hidden')}
+}
+function applySavedMachine(){
+  const machine=customerMachines.find(item=>item.id===value('job-saved-machine'));if(!machine)return;
+  document.getElementById('job-model').value=machine.machine_model_id||'';
+  document.getElementById('job-serial').value=machine.serial_number||'';
+  document.getElementById('job-machine-description').value=machine.display_name||'';
+}
+async function loadJobs(keepSelection=true){
+  const list=document.getElementById('job-list');list.innerHTML='<div class="empty-state"><strong>Loading work orders…</strong></div>';
+  const query=document.getElementById('job-search').value.trim(),status=document.getElementById('status-filter').value;
+  try{
+    const data=await Api.request('/repair-jobs?limit=100&query='+encodeURIComponent(query)+'&status='+encodeURIComponent(status));jobs=data.jobs||[];renderJobs();
+    if(keepSelection&&selectedJob&&jobs.some(job=>job.id===selectedJob.id))await showJob(selectedJob.id);
+  }catch(error){list.innerHTML='';document.getElementById('job-empty').classList.remove('hidden');document.getElementById('job-empty').querySelector('strong').textContent='Unable to load repair jobs';document.getElementById('job-empty').querySelector('p').textContent=error.message}
+}
+function renderJobs(){
+  const list=document.getElementById('job-list'),empty=document.getElementById('job-empty');list.innerHTML='';empty.classList.toggle('hidden',jobs.length>0);document.getElementById('job-count').textContent=jobs.length+' job'+(jobs.length===1?'':'s');
+  for(const job of jobs){const button=document.createElement('button');button.type='button';button.className='job-row'+(selectedJob?.id===job.id?' selected':'');button.innerHTML='<span class="job-row-top"><strong>'+OS.esc(job.customer_name)+'</strong><span class="status-pill status-'+OS.esc(job.status)+'">'+OS.esc(job.status_label)+'</span></span><span class="job-machine">'+OS.esc(machineName(job))+'</span><span class="job-row-foot"><b>'+OS.esc(job.work_order)+'</b><span>'+OS.esc(relativeDate(job.updated_at))+'</span></span>';button.addEventListener('click',()=>showJob(job.id));list.appendChild(button)}
+}
+async function showJob(id){try{const data=await Api.request('/repair-jobs/'+encodeURIComponent(id));selectedJob=data.job;renderJobs();renderDetail()}catch(error){Toast.show(error.message)}}
+function renderDetail(){
+  const detail=document.getElementById('job-detail');document.getElementById('detail-empty').classList.add('hidden');detail.classList.remove('hidden');const job=selectedJob,actions=actionsByStatus[job.status]||[],accessories=job.accessories?.length?job.accessories.join(', '):'None recorded';
+  detail.innerHTML='<div class="job-hero"><div><span class="detail-code">'+OS.esc(job.work_order)+'</span><h3>'+OS.esc(job.customer_name)+'</h3><p>'+OS.esc(machineName(job))+'</p></div><span class="status-pill status-'+OS.esc(job.status)+'">'+OS.esc(job.status_label)+'</span></div><div class="job-facts">'+fact('Branch',job.branch_code+' · '+job.branch_name)+fact('Phone',job.customer_phone||'Not recorded')+fact('Serial number',job.serial_number||'Not recorded')+fact('Urgency',title(job.urgency||'normal'))+fact('Accessories',accessories)+fact('Reported problem',job.reported_problem)+'</div><div class="job-actions">'+actions.map(action=>'<button class="secondary-button '+(action[0]==='job_cancelled'?'':'orange')+'" type="button" data-event="'+OS.esc(action[0])+'">'+OS.esc(action[1])+'</button>').join('')+'<button class="secondary-button" type="button" data-event="note_added">+ Add note</button></div><div class="timeline-head"><h4>Service timeline</h4><span>'+job.events.length+' update'+(job.events.length===1?'':'s')+'</span></div><div class="job-timeline">'+job.events.slice().reverse().map(timelineEvent).join('')+'</div>';
+  detail.querySelector('.job-hero').insertAdjacentHTML('afterend',journeyMarkup(job.status));
+  if(['inspecting','awaiting_approval','approved','repairing','paused','waiting_parts'].includes(job.status))detail.querySelector('.job-actions').insertAdjacentHTML('beforeend','<button class="secondary-button orange" type="button" data-estimate>'+(job.status==='inspecting'?'Prepare estimate':'View estimate')+'</button>');
+  if(['repairing','paused','waiting_parts'].includes(job.status))detail.querySelector('.job-actions').insertAdjacentHTML('beforeend','<button class="secondary-button orange" type="button" data-service-record>Service record</button>');
+  if(['ready','delivered'].includes(job.status))detail.querySelector('.job-actions').insertAdjacentHTML('beforeend','<button class="secondary-button orange" type="button" data-billing>Billing ready</button>');
+  detail.querySelectorAll('[data-event]').forEach(button=>button.addEventListener('click',()=>openAction(button.dataset.event,button.textContent)));
+  detail.querySelector('[data-estimate]')?.addEventListener('click',openEstimate);
+  detail.querySelector('[data-service-record]')?.addEventListener('click',openServiceRecord);
+  detail.querySelector('[data-billing]')?.addEventListener('click',openBilling);
+}
+function journeyMarkup(status){
+  const stages=[['received','Accept'],['inspecting','Inspect'],['awaiting_approval','Estimate'],['approved','Approved'],['repairing','Work'],['ready','Billing'],['delivered','Delivered']],index={received:0,inspecting:1,awaiting_approval:2,approved:3,repairing:4,paused:4,waiting_parts:4,ready:5,delivered:6,cancelled:-1}[status]??0;
+  const guidance={received:['Begin inspection','The machine is safely accepted. Record what you find.'],inspecting:['Prepare the estimate','Use remembered prices, then finish inspection.'],awaiting_approval:['Get customer approval','Share the estimate and record the decision.'],approved:['Start the repair','The approved work is ready for the technician.'],repairing:['Record actual work','Complete the service record; billing will be prepared automatically.'],paused:['Resolve the pause','Resume when work can continue.'],waiting_parts:['Receive required parts','Continue when parts are available.'],ready:['Billing information is ready','Notify the customer and prepare delivery.'],delivered:['Repair case complete','The full history remains available.'],cancelled:['Job cancelled','The history remains available.']}[status]||['Next useful action','Continue the repair journey.'];
+  return '<section class="repair-journey"><div class="journey-track">'+stages.map((stage,stageIndex)=>'<span class="'+(stageIndex<index?'done':stageIndex===index?'current':'')+'"><i>'+(stageIndex<index?'✓':stageIndex+1)+'</i>'+stage[1]+'</span>').join('')+'</div><div class="next-step-card"><small>Next useful action</small><strong>'+OS.esc(guidance[0])+'</strong><p>'+OS.esc(guidance[1])+'</p></div></section>';
+}
+function timelineEvent(event){
+  const notes=[event.data?.note,event.data?.intakeNotes].filter(Boolean),extras=[];if(event.data?.estimateAmount!==null&&event.data?.estimateAmount!==undefined)extras.push('Estimate: '+money(event.data.estimateAmount));if(event.data?.accessories?.length)extras.push('Accessories: '+event.data.accessories.join(', '));if(event.data?.serviceRecordNumber)extras.push('Service record: '+event.data.serviceRecordNumber);if(event.data?.billingReference)extras.push('Billing ready: '+event.data.billingReference+' · '+money(event.data.grandTotal));
+  return '<article class="timeline-event"><span class="timeline-dot"></span><div><strong>'+OS.esc(eventLabels[event.event_type]||title(event.event_type))+'</strong><span>'+OS.esc(formatDate(event.created_at)+' · '+event.created_by_name)+'</span>'+notes.map(note=>'<p>'+OS.esc(note)+'</p>').join('')+extras.map(extra=>'<small>'+OS.esc(extra)+'</small>').join('')+'</div></article>';
+}
+function openAction(type,label){document.getElementById('action-title').textContent=label;document.getElementById('action-type').value=type;document.getElementById('action-note').value='';document.getElementById('estimate-amount').value='';document.getElementById('estimate-field').classList.add('hidden');document.getElementById('action-message').textContent=type==='inspection_completed'?'The saved itemised estimate will be used.':'';document.getElementById('action-modal').classList.remove('hidden');document.getElementById('action-note').focus()}
+let estimateResults=[],currentEstimate=null;
+async function openEstimate(){
+  const lines=document.getElementById('estimate-lines'),message=document.getElementById('estimate-message'),results=document.getElementById('estimate-search-results');
+  lines.innerHTML='';message.textContent='Loading estimate…';results.innerHTML='';results.classList.add('hidden');document.getElementById('estimate-search').value='';document.getElementById('estimate-modal').classList.remove('hidden');
+  try{
+    const data=await Api.request('/repair-jobs/'+encodeURIComponent(selectedJob.id)+'/estimate'),estimate=data.estimate;currentEstimate=estimate;
+    document.getElementById('estimate-title').textContent=estimate?estimate.estimate_number:'Prepare estimate';
+    document.getElementById('estimate-notes').value=estimate?.notes||'';
+    (estimate?.items||[]).forEach(addEstimateLine);
+    if(!lines.children.length)addEstimateLine({item_type:'service',quantity:1,gst_rate:18,source:'manual'});
+    document.getElementById('share-estimate').classList.toggle('hidden',!estimate);message.textContent=estimate?'Last saved '+formatDate(estimate.updated_at):'Draft a clear itemised estimate for the customer.';
+    calculateEstimate();
+  }catch(error){message.textContent=error.message}
+}
+function addEstimateLine(item={}){
+  const line=document.createElement('article');line.className='estimate-line';
+  const type=item.item_type||item.itemType||'part',partNumber=item.part_number||item.partNumber||'',description=item.description||'',hsn=item.hsn_sac||item.hsnSac||'',gst=item.gst_rate??item.gstRate??18,quantity=item.quantity??1,rate=item.unit_price??item.unitPrice??'',source=item.source||'manual';
+  line.dataset.source=source;
+  line.innerHTML='<div class="estimate-line-head"><select class="control" data-estimate-field="itemType"><option value="part">Part / accessory</option><option value="service">Service labour</option><option value="other">Other</option></select><button class="icon-button" type="button" data-remove-line aria-label="Remove estimate line">×</button></div><div class="estimate-line-grid"><div class="field"><label>Part number</label><input class="control" data-estimate-field="partNumber" value="'+OS.esc(partNumber)+'" placeholder="Required for parts"></div><div class="field description"><label>Description *</label><input class="control" data-estimate-field="description" value="'+OS.esc(description)+'" required></div><div class="field"><label>HSN / SAC *</label><input class="control" data-estimate-field="hsnSac" value="'+OS.esc(hsn)+'" required></div><div class="field compact"><label>GST % *</label><input class="control" data-estimate-field="gstRate" type="number" min="0" max="100" step="0.01" value="'+OS.esc(gst)+'" required></div><div class="field compact"><label>Qty *</label><input class="control" data-estimate-field="quantity" type="number" min="0.01" step="0.01" value="'+OS.esc(quantity)+'" required></div><div class="field"><label>Rate *</label><input class="control" data-estimate-field="unitPrice" type="number" min="0" step="0.01" value="'+OS.esc(rate)+'" required></div><div class="estimate-line-total" data-line-total>₹0</div></div>';
+  line.querySelector('[data-estimate-field="itemType"]').value=type;
+  line.querySelectorAll('input,select').forEach(control=>control.addEventListener('input',calculateEstimate));
+  line.querySelector('[data-remove-line]').addEventListener('click',()=>{line.remove();calculateEstimate()});
+  document.getElementById('estimate-lines').appendChild(line);calculateEstimate();
+}
+function calculateEstimate(){
+  let subtotal=0,tax=0;
+  document.querySelectorAll('#estimate-lines .estimate-line').forEach(line=>{
+    const quantity=Number(line.querySelector('[data-estimate-field="quantity"]').value)||0,rate=Number(line.querySelector('[data-estimate-field="unitPrice"]').value)||0,gst=Number(line.querySelector('[data-estimate-field="gstRate"]').value)||0,taxable=quantity*rate,lineTax=taxable*gst/100;
+    subtotal+=taxable;tax+=lineTax;line.querySelector('[data-line-total]').textContent=money(taxable+lineTax);
+  });
+  document.getElementById('estimate-subtotal').textContent=money(subtotal);document.getElementById('estimate-tax').textContent=money(tax);document.getElementById('estimate-total').textContent=money(subtotal+tax);
+}
+async function searchEstimateCatalogue(){
+  const query=document.getElementById('estimate-search').value.trim(),container=document.getElementById('estimate-search-results');
+  if(query.length<2){container.classList.remove('hidden');container.innerHTML='<p>Enter at least two letters or digits.</p>';return}
+  container.classList.remove('hidden');container.innerHTML='<p>Searching the June 2026 catalogue…</p>';
+  try{
+    const data=await Api.request('/knowledge/parts?query='+encodeURIComponent(query)+'&limit=20');estimateResults=data.parts||[];
+    container.innerHTML=estimateResults.length?estimateResults.map((item,index)=>'<button type="button" class="estimate-result" data-estimate-result="'+index+'"><span><strong>'+OS.esc(item.name||'Unnamed item')+'</strong><small>'+OS.esc([item.partNumber,item.hsn?'HSN '+item.hsn:null,item.gst!==null?'GST '+item.gst+'%':null].filter(Boolean).join(' · '))+'</small></span><b>'+OS.esc(item.retailPrice===null?'Price blank':money(item.retailPrice))+'</b></button>').join(''):'<p>No matching catalogue items.</p>';
+    container.querySelectorAll('[data-estimate-result]').forEach(button=>button.addEventListener('click',()=>{const item=estimateResults[Number(button.dataset.estimateResult)];addEstimateLine({item_type:'part',part_number:item.partNumber,description:item.name,hsn_sac:item.hsn,gst_rate:item.gst??18,quantity:1,unit_price:item.retailPrice??'',source:(item.sources||[]).join(',')||'cloud_catalog'});container.classList.add('hidden')}));
+  }catch(error){container.innerHTML='<p>'+OS.esc(error.message)+'</p>'}
+}
+let serviceResults=[],currentServiceRecord=null;
+async function openServiceRecord(){
+  const modal=document.getElementById('service-record-modal'),lines=document.getElementById('service-lines'),message=document.getElementById('service-message'),results=document.getElementById('service-search-results');
+  lines.innerHTML='';results.innerHTML='';results.classList.add('hidden');document.getElementById('service-search').value='';message.textContent='Loading remembered work…';modal.classList.remove('hidden');
+  try{
+    const data=await Api.request('/repair-jobs/'+encodeURIComponent(selectedJob.id)+'/service-record'),record=data.serviceRecord;currentServiceRecord=record;
+    document.getElementById('service-record-title').textContent=record?record.record_number:'Service record';
+    document.getElementById('service-technician').value=record?.technician_id||session.id;
+    document.getElementById('service-diagnosis').value=record?.diagnosis||'';
+    document.getElementById('service-work').value=record?.work_performed||'';
+    document.getElementById('service-notes').value=record?.notes||'';
+    const startingItems=record?.items?.length?record.items:(data.suggestedItems||[]);
+    startingItems.forEach(addServiceLine);
+    if(!lines.children.length)addServiceLine({item_type:'service',quantity:1,gst_rate:18,source:'manual'});
+    const completeButton=document.getElementById('complete-service');completeButton.disabled=data.jobStatus!=='repairing';completeButton.textContent=data.jobStatus==='repairing'?'Complete work & prepare billing':'Resume repair before completing';
+    message.textContent=record?'Draft restored · last saved '+formatDate(record.updated_at):(startingItems.length?'Estimate copied. Change it to match the actual work.':'Add actual labour and parts used.');
+    calculateService();
+  }catch(error){message.textContent=error.message}
+}
+function addServiceLine(item={}){
+  const line=document.createElement('article');line.className='estimate-line';
+  const type=item.item_type||item.itemType||'part',partNumber=item.part_number||item.partNumber||'',description=item.description||'',hsn=item.hsn_sac||item.hsnSac||'',gst=item.gst_rate??item.gstRate??18,quantity=item.quantity??1,rate=item.unit_price??item.unitPrice??'',source=item.source||'manual';
+  line.dataset.source=source;
+  line.innerHTML='<div class="estimate-line-head"><select class="control" data-service-field="itemType"><option value="part">Part / accessory</option><option value="service">Service labour</option><option value="other">Other</option></select><button class="icon-button" type="button" data-remove-service-line aria-label="Remove service line">×</button></div><div class="estimate-line-grid"><div class="field"><label>Part number</label><input class="control" data-service-field="partNumber" value="'+OS.esc(partNumber)+'" placeholder="Required for parts"></div><div class="field description"><label>Actual item / work *</label><input class="control" data-service-field="description" value="'+OS.esc(description)+'" required></div><div class="field"><label>HSN / SAC *</label><input class="control" data-service-field="hsnSac" value="'+OS.esc(hsn)+'" required></div><div class="field compact"><label>GST % *</label><input class="control" data-service-field="gstRate" type="number" min="0" max="100" step="0.01" value="'+OS.esc(gst)+'" required></div><div class="field compact"><label>Qty *</label><input class="control" data-service-field="quantity" type="number" min="0.01" step="0.01" value="'+OS.esc(quantity)+'" required></div><div class="field"><label>Rate *</label><input class="control" data-service-field="unitPrice" type="number" min="0" step="0.01" value="'+OS.esc(rate)+'" required></div><div class="estimate-line-total" data-service-line-total>₹0</div></div>';
+  line.querySelector('[data-service-field="itemType"]').value=type;
+  line.querySelectorAll('input,select').forEach(control=>control.addEventListener('input',calculateService));
+  line.querySelector('[data-remove-service-line]').addEventListener('click',()=>{line.remove();calculateService()});
+  document.getElementById('service-lines').appendChild(line);calculateService();
+}
+function calculateService(){
+  let subtotal=0,tax=0;
+  document.querySelectorAll('#service-lines .estimate-line').forEach(line=>{
+    const quantity=Number(line.querySelector('[data-service-field="quantity"]').value)||0,rate=Number(line.querySelector('[data-service-field="unitPrice"]').value)||0,gst=Number(line.querySelector('[data-service-field="gstRate"]').value)||0,taxable=quantity*rate,lineTax=taxable*gst/100;
+    subtotal+=taxable;tax+=lineTax;line.querySelector('[data-service-line-total]').textContent=money(taxable+lineTax);
+  });
+  document.getElementById('service-subtotal').textContent=money(subtotal);document.getElementById('service-tax').textContent=money(tax);document.getElementById('service-total').textContent=money(subtotal+tax);
+}
+async function searchServiceCatalogue(){
+  const query=value('service-search'),container=document.getElementById('service-search-results');
+  if(query.length<2){container.classList.remove('hidden');container.innerHTML='<p>Enter at least two letters or digits.</p>';return}
+  container.classList.remove('hidden');container.innerHTML='<p>Finding the closest catalogue items…</p>';
+  try{
+    const [partsData,servicesData]=await Promise.all([Api.request('/knowledge/parts?query='+encodeURIComponent(query)+'&limit=20'),Api.request('/service-types')]),normalized=query.toLowerCase().replace(/[^a-z0-9]+/g,'');
+    const services=(servicesData.serviceTypes||[]).filter(item=>(item.name+' '+(item.description||'')).toLowerCase().replace(/[^a-z0-9]+/g,'').includes(normalized)).slice(0,10).map(item=>({kind:'service',name:item.name,partNumber:'',hsn:item.hsn_sac,gst:item.gst_rate,retailPrice:item.default_price,sources:['service_rate']}));
+    serviceResults=[...services,...(partsData.parts||[]).map(item=>({...item,kind:'part'}))];
+    container.innerHTML=serviceResults.length?serviceResults.map((item,index)=>'<button type="button" class="estimate-result" data-service-result="'+index+'"><span><strong>'+OS.esc(item.name||'Unnamed item')+'</strong><small>'+OS.esc([item.kind==='service'?'Labour':item.partNumber,item.hsn?'HSN/SAC '+item.hsn:null,item.gst!==null?'GST '+item.gst+'%':null].filter(Boolean).join(' · '))+'</small></span><b>'+OS.esc(item.retailPrice===null?'Price blank':money(item.retailPrice))+'</b></button>').join(''):'<p>No matching catalogue items or service rates.</p>';
+    container.querySelectorAll('[data-service-result]').forEach(button=>button.addEventListener('click',()=>{const item=serviceResults[Number(button.dataset.serviceResult)];addServiceLine({item_type:item.kind==='service'?'service':'part',part_number:item.partNumber,description:item.name,hsn_sac:item.hsn,gst_rate:item.gst??18,quantity:1,unit_price:item.retailPrice??'',source:(item.sources||[]).join(',')||(item.kind==='service'?'service_rate':'cloud_catalog')});container.classList.add('hidden')}));
+  }catch(error){container.innerHTML='<p>'+OS.esc(error.message)+'</p>'}
+}
+function servicePayload(){
+  const items=[...document.querySelectorAll('#service-lines .estimate-line')].map(line=>({itemType:line.querySelector('[data-service-field="itemType"]').value,partNumber:line.querySelector('[data-service-field="partNumber"]').value.trim(),description:line.querySelector('[data-service-field="description"]').value.trim(),hsnSac:line.querySelector('[data-service-field="hsnSac"]').value.trim(),gstRate:line.querySelector('[data-service-field="gstRate"]').value,quantity:line.querySelector('[data-service-field="quantity"]').value,unitPrice:line.querySelector('[data-service-field="unitPrice"]').value,source:line.dataset.source||'manual'}));
+  return {technicianId:value('service-technician'),diagnosis:value('service-diagnosis'),workPerformed:value('service-work'),notes:value('service-notes'),items};
+}
+async function saveServiceDraft(){
+  const button=document.getElementById('save-service-draft'),message=document.getElementById('service-message');button.disabled=true;message.textContent='Saving actual work…';
+  try{const data=await Api.request('/repair-jobs/'+encodeURIComponent(selectedJob.id)+'/service-record',{method:'PUT',body:JSON.stringify(servicePayload())});currentServiceRecord=data.serviceRecord;document.getElementById('service-record-title').textContent=data.serviceRecord.record_number;message.textContent='Draft safely saved '+formatDate(data.serviceRecord.updated_at);Toast.show('Service record saved.')}catch(error){message.textContent=error.message}finally{button.disabled=false}
+}
+async function openBilling(existing=null){
+  document.getElementById('billing-modal').classList.remove('hidden');const container=document.getElementById('billing-content');container.innerHTML='<div class="empty-state compact"><strong>Preparing billing information…</strong></div>';
+  try{
+    const data=existing?.billing?existing:await Api.request('/repair-jobs/'+encodeURIComponent(selectedJob.id)+'/billing-material'),billing=data.billing;
+    if(!billing){container.innerHTML='<div class="empty-state compact"><strong>Billing is not ready</strong><p>Complete the service record first.</p></div>';return}
+    document.getElementById('billing-title').textContent=billing.billing_reference;
+    container.innerHTML='<div class="billing-ready-banner"><span>✓</span><div><strong>Ready for billing</strong><p>Generated automatically from '+OS.esc(billing.service_record_number)+' · '+OS.esc(billing.technician_name)+'</p></div></div><div class="billing-facts">'+fact('Customer',billing.customer?.name||selectedJob.customer_name)+fact('Machine',billing.machine?.name||machineName(selectedJob))+fact('Diagnosis',billing.diagnosis||'Not recorded')+fact('Work performed',billing.work_performed||'Not recorded')+'</div><div class="billing-lines">'+(billing.items||[]).map(item=>'<article><div><strong>'+OS.esc(item.description)+'</strong><small>'+OS.esc([item.part_number,item.hsn_sac,'GST '+item.gst_rate+'%'].filter(Boolean).join(' · '))+'</small></div><span>'+number(item.quantity)+' × '+money(item.unit_price)+'</span><b>'+money(item.line_total)+'</b></article>').join('')+'</div><div class="estimate-totals"><span>Subtotal <strong>'+money(billing.subtotal)+'</strong></span><span>GST <strong>'+money(billing.tax_total)+'</strong></span><span class="grand-total">Billing total <strong>'+money(billing.grand_total)+'</strong></span></div><p class="billing-note">This is structured billing material, not a tax invoice. The billing application can consume it without retyping.</p>';
+  }catch(error){container.innerHTML='<div class="empty-state compact"><strong>Unable to load billing</strong><p>'+OS.esc(error.message)+'</p></div>'}
+}
+document.getElementById('job-form').addEventListener('submit',async event=>{
+  event.preventDefault();const button=document.getElementById('create-job-button'),message=document.getElementById('job-form-message'),accessories=[...document.querySelectorAll('input[name="accessory"]:checked')].map(input=>input.value),other=value('other-accessory');if(other)accessories.push(other);
+  const payload={customerId:value('job-customer'),customerMachineId:value('job-saved-machine'),branchId:value('job-branch'),machineModelId:value('job-model'),machineDescription:value('job-machine-description'),serialNumber:value('job-serial'),urgency:value('job-urgency'),accessories,reportedProblem:value('job-problem'),intakeNotes:value('intake-notes')};button.disabled=true;message.textContent='Remembering customer, machine and work order…';
+  try{const data=await Api.request('/repair-jobs',{method:'POST',body:JSON.stringify(payload)});selectedJob=data.job;closeModal('job-modal');document.getElementById('job-form').reset();document.getElementById('saved-machine-field').classList.add('hidden');Toast.show('Machine accepted · '+data.job.work_order);await loadJobs();await showJob(data.job.id)}catch(error){message.textContent=error.message}finally{button.disabled=false}
+});
+document.getElementById('action-form').addEventListener('submit',async event=>{
+  event.preventDefault();const button=document.getElementById('save-action'),message=document.getElementById('action-message');button.disabled=true;message.textContent='Saving timeline update…';
+  try{const data=await Api.request('/repair-jobs/'+encodeURIComponent(selectedJob.id)+'/events',{method:'POST',body:JSON.stringify({eventType:value('action-type'),note:value('action-note'),estimateAmount:value('estimate-amount')})});selectedJob=data.job;closeModal('action-modal');Toast.show('Repair job updated.');await loadJobs();renderDetail()}catch(error){message.textContent=error.message}finally{button.disabled=false}
+});
+document.getElementById('estimate-form').addEventListener('submit',async event=>{
+  event.preventDefault();const button=document.getElementById('save-estimate'),message=document.getElementById('estimate-message'),items=[...document.querySelectorAll('#estimate-lines .estimate-line')].map(line=>({itemType:line.querySelector('[data-estimate-field="itemType"]').value,partNumber:line.querySelector('[data-estimate-field="partNumber"]').value.trim(),description:line.querySelector('[data-estimate-field="description"]').value.trim(),hsnSac:line.querySelector('[data-estimate-field="hsnSac"]').value.trim(),gstRate:line.querySelector('[data-estimate-field="gstRate"]').value,quantity:line.querySelector('[data-estimate-field="quantity"]').value,unitPrice:line.querySelector('[data-estimate-field="unitPrice"]').value,source:line.dataset.source||'manual'}));
+  button.disabled=true;message.textContent='Saving estimate to the cloud…';
+  try{const data=await Api.request('/repair-jobs/'+encodeURIComponent(selectedJob.id)+'/estimate',{method:'PUT',body:JSON.stringify({notes:value('estimate-notes'),items})});currentEstimate=data.estimate;document.getElementById('estimate-title').textContent=data.estimate.estimate_number;document.getElementById('share-estimate').classList.remove('hidden');message.textContent='Saved '+formatDate(data.estimate.updated_at);Toast.show('Estimate '+data.estimate.estimate_number+' saved.');await loadJobs()}catch(error){message.textContent=error.message}finally{button.disabled=false}
+});
+document.getElementById('share-estimate').addEventListener('click',()=>{
+  if(!currentEstimate)return;let phone=String(selectedJob.customer_phone||'').replace(/\D/g,'');if(phone.length===10)phone='91'+phone;else if(phone.length===11&&phone.startsWith('0'))phone='91'+phone.slice(1);if(!phone){Toast.show('Add a customer phone number first.');return}
+  const message=['Hello '+selectedJob.customer_name+',','Estimate '+currentEstimate.estimate_number+' for '+selectedJob.work_order+' is '+money(currentEstimate.grand_total)+'.','Please reply to approve or contact your TAGRO branch for details.'].join('\n\n');
+  window.open('https://wa.me/'+phone+'?text='+encodeURIComponent(message),'_blank','noopener');
+});
+document.getElementById('estimate-search-button').addEventListener('click',searchEstimateCatalogue);
+document.getElementById('estimate-search').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();searchEstimateCatalogue()}});
+document.getElementById('add-estimate-row').addEventListener('click',()=>addEstimateLine({item_type:'part',quantity:1,gst_rate:18,source:'manual'}));
+document.getElementById('service-record-form').addEventListener('submit',async event=>{
+  event.preventDefault();const button=document.getElementById('complete-service'),message=document.getElementById('service-message');if(!confirm('Complete the mechanical work and prepare billing information?'))return;button.disabled=true;message.textContent='Completing service record and preparing billing…';
+  try{const data=await Api.request('/repair-jobs/'+encodeURIComponent(selectedJob.id)+'/service-record/complete',{method:'POST',body:JSON.stringify(servicePayload())});closeModal('service-record-modal');Toast.show('Work complete · billing information ready.');await showJob(selectedJob.id);await openBilling(data)}catch(error){message.textContent=error.message}finally{button.disabled=false}
+});
+document.getElementById('save-service-draft').addEventListener('click',saveServiceDraft);
+document.getElementById('service-search-button').addEventListener('click',searchServiceCatalogue);
+document.getElementById('service-search').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();searchServiceCatalogue()}});
+document.getElementById('add-service-row').addEventListener('click',()=>addServiceLine({item_type:'part',quantity:1,gst_rate:18,source:'manual'}));
+document.getElementById('job-customer').addEventListener('change',loadCustomerMachines);
+document.getElementById('job-saved-machine').addEventListener('change',applySavedMachine);
+document.getElementById('new-job').addEventListener('click',()=>{document.getElementById('job-form-message').textContent='';document.getElementById('job-modal').classList.remove('hidden')});
+document.querySelectorAll('[data-close]').forEach(button=>button.addEventListener('click',()=>closeModal(button.dataset.close)));
+document.getElementById('refresh-button').addEventListener('click',()=>loadJobs());document.getElementById('status-filter').addEventListener('change',()=>loadJobs(false));document.getElementById('job-search').addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>loadJobs(false),350)});
+function closeModal(id){document.getElementById(id).classList.add('hidden')}function value(id){return document.getElementById(id)?.value.trim()||''}
+function machineName(job){return job.customer_machine_name||job.model_name?[job.customer_machine_name||job.make_name,job.customer_machine_name?'':job.model_name,job.customer_machine_name?'':job.machine_type].filter(Boolean).join(' · '):'Machine identity pending'}function fact(label,value){return '<div><label>'+OS.esc(label)+'</label><p>'+OS.esc(value)+'</p></div>'}function title(value){return String(value||'').replace(/_/g,' ').replace(/\b\w/g,letter=>letter.toUpperCase())}function money(value){return '₹'+Number(value||0).toLocaleString('en-IN',{maximumFractionDigits:2})}function number(value){return Number(value||0).toLocaleString('en-IN',{maximumFractionDigits:2})}function formatDate(value){return new Date(value).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'})}function relativeDate(value){const date=new Date(value),days=Math.floor((Date.now()-date.getTime())/86400000);return days<1?date.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):days===1?'Yesterday':date.toLocaleDateString('en-IN',{day:'numeric',month:'short'})}
+</script>
+</body>
+</html>

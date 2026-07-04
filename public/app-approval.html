@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>Authorizations</title>
+<style>
+  body { font-family:-apple-system,sans-serif; background:#f0ede8; padding:16px; margin:0; }
+  .card { background:#fff; padding:16px; border-radius:12px; margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.04); }
+  .btn { width:100%; padding:13px; background:#166534; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer; margin-bottom:6px; }
+</style>
+</head>
+<body>
+<div class="card"><h2>Customer Authorization</h2><div id="meta" style="font-size:14px; margin-bottom:12px;"></div><div id="panel-action" style="display:none;"><button class="btn" onclick="commit('customer_approved')">Grant Full Consent</button><button class="btn" style="background:#b91c1c;" onclick="commit('customer_declined')">Decline Context</button></div></div>
+<div style="display:flex; gap:10px;">
+  <button class="btn" style="background:#6b7280; flex:1;" onclick="parent.AppLauncher.open('launcher')">← Dashboard</button>
+  <button class="btn" style="background:#4b5563; flex:1;" onclick="parent.AppLauncher.open('work', id)">Workbench ➔</button>
+</div>
+<script>
+  let id = new URLSearchParams(window.location.search).get('jobId');
+  window.addEventListener('DOMContentLoaded', load);
+  function load() {
+    const j = parent.Jobs.find(id); if(!j) return;
+    const est = parent.TAGRO_CORE.TimelineQuery.getActiveEstimate(j);
+    const m = document.getElementById('meta');
+    if(!est) { m.innerHTML = '<i>Awaiting configuration invoice...</i>'; return; }
+    const tl = j.timeline || [];
+    if(tl.some(e=>e.type==='customer_approved')) { m.innerHTML='<b style="color:#166534;">✓ Order Approved. Placed in workbench queue.</b>'; }
+    else if(tl.some(e=>e.type==='customer_declined')) { m.innerHTML='<b style="color:#b91c1c;">➔ Proposed scope declined by customer.</b>'; }
+    else { m.innerHTML = `Authorized Target Balance: <b>₹${est.estimateSummary.calculations.grandTotal.toFixed(2)}</b>`; document.getElementById('panel-action').style.display='block'; }
+  }
+  async function commit(type) {
+    const j = parent.Jobs.find(id); const est = parent.TAGRO_CORE.TimelineQuery.getActiveEstimate(j);
+    const p = parent.TAGRO_CORE.EventFactory.build(j, type, { estimateId: est?.estimateId, grandTotal: 2450.00 }, parent.Session.get());
+    try { await parent.TAGRO_CORE.persist(id, p, parent.Session.get(), 'app-approval'); document.getElementById('panel-action').style.display='none'; load(); } catch(e){ parent.Toast.show(e.message); }
+  }
+  function onJobsSynchronized() { load(); }
+</script>
+</body>
+</html>

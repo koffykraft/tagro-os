@@ -1,0 +1,10 @@
+{
+  "short_name": "TAGRO_OS",
+  "name": "TAGRO Workshop Operating System",
+  "start_url": "/index.html",
+  "background_color": "#121212",
+  "theme_color": "#df6427",
+  "display": "standalone",
+  "orientation": "portrait",
+  "icons": []
+}

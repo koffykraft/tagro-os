@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>Quotations Counter</title>
+<style>
+  body { font-family:-apple-system,sans-serif; background:#f0ede8; padding:16px; margin:0; color:#121212; }
+  .card { background:#fff; padding:16px; border-radius:12px; margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.04); }
+  .btn { width:100%; padding:12px; background:#df6427; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer; }
+  .info { font-size:13px; margin-bottom:10px; background:#fff7ed; padding:10px; border-radius:6px; color:#7c2d12; border:1px solid #ffedd5; }
+</style>
+</head>
+<body>
+<div class="card"><h1 id="wo" style="margin:0; font-size:20px; color:#df6427;">WO-LOADING</h1></div>
+<div id="alert-box"></div>
+<div class="card" id="panel-action">
+  <h2>Pricing Matrix Compiler</h2>
+  <button class="btn" onclick="draft()">Publish Base Quote File (₹2450.00)</button>
+</div>
+<div style="display:flex; gap:10px;">
+  <button class="btn" style="background:#6b7280; flex:1;" onclick="parent.AppLauncher.open('launcher')">← Dashboard</button>
+  <button class="btn" style="background:#4b5563; flex:1;" onclick="parent.AppLauncher.open('approval', id)">Authorizations ➔</button>
+</div>
+<script>
+  let id = new URLSearchParams(window.location.search).get('jobId');
+  window.addEventListener('DOMContentLoaded', load);
+  function load() {
+    document.getElementById('wo').textContent = id || 'No Job';
+    const j = parent.Jobs.find(id); if(!j) return;
+    const i = parent.TAGRO_CORE.TimelineQuery.getLatestInspection(j);
+    document.getElementById('alert-box').innerHTML = i ? `<div class="info"><b>Teardown Baseline Findings:</b> ${i.findings}</div>` : '<div class="info" style="background:#fee2e2; color:#991b1b; border-color:#fecaca;">⚠️ Missing published inspection data profile.</div>';
+    const est = parent.TAGRO_CORE.TimelineQuery.getActiveEstimate(j);
+    if(est) document.getElementById('panel-action').innerHTML = `<div class="info" style="background:#f0fdf4; color:#166534; border-color:#bbf7d0; margin-bottom:0;">✓ Draft generated: ID ${est.estimateId}</div>`;
+  }
+  async function draft() {
+    const p = parent.TAGRO_CORE.EventFactory.build({id}, 'estimate_drafted', {
+      estimateSummary: { calculations: { grandTotal: 2450.00 }, partsItems: [{ partNo: '4130-120-0603', description: 'Carburetor Unit', qty: 1 }] }
+    }, parent.Session.get());
+    try { await parent.TAGRO_CORE.persist(id, p, parent.Session.get(), 'app-estimate'); load(); } catch(e){ parent.Toast.show(e.message); }
+  }
+  function onJobsSynchronized() { load(); }
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>Jobs Registry</title>
+<style>
+  body { font-family:-apple-system,sans-serif; background:#f0ede8; padding:16px; margin:0; color:#121212; }
+  .card { background:#fff; border-radius:12px; padding:16px; margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.04); }
+  input { width:100%; padding:12px; margin-bottom:8px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; }
+  .btn { width:100%; padding:14px; background:#df6427; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer; }
+  .row { background:#fff; padding:12px; border-radius:8px; margin-bottom:6px; display:flex; justify-content:space-between; cursor:pointer; border:1px solid #ddd; font-size:14px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h2 style="margin-top:0; font-size:14px; text-transform:uppercase; color:#6b7280;">Intake Machinery Asset</h2>
+  <input type="text" id="cust" placeholder="Customer Name">
+  <input type="text" id="mod" placeholder="Machinery Model (e.g. STIHL MS-250)">
+  <button class="btn" onclick="addJob()">Open Folder File</button>
+</div>
+<div class="card">
+  <h2 style="margin-top:0; font-size:14px; text-transform:uppercase; color:#6b7280;">Active Queues</h2>
+  <div id="target"></div>
+</div>
+<button class="btn" style="background:#6b7280;" onclick="parent.AppLauncher.open('launcher')">← Back to Dashboard</button>
+<script>
+  function render() {
+    const t = document.getElementById('target'); const pool = parent.Jobs?._cache || [];
+    if(pool.length === 0) { t.innerHTML = '<div style="font-style:italic; color:#6b7280;">No entries active.</div>'; return; }
+    t.innerHTML = pool.map(j => `<div class="row" onclick="parent.AppLauncher.open('inspection', '${j.id}')"><span><b>${escapeHtml(j.workOrder)}</b> - ${escapeHtml(j.model)} (${escapeHtml(j.customer?.name)})</span><span style="color:#df6427;">➔</span></div>`).join('');
+  }
+  async function addJob() {
+    const c = document.getElementById('cust').value.trim(); const m = document.getElementById('mod').value.trim();
+    if(!c || !m) return; const wo = 'WO-' + Math.floor(10000+Math.random()*90000);
+    const p = parent.TAGRO_CORE.EventFactory.build(null, 'job_created', { workOrder: wo, customer: { name: c }, model: m }, parent.Session.get());
+    try { await parent.TAGRO_CORE.persist(wo, p, parent.Session.get(), 'app-jobs'); document.getElementById('cust').value=''; document.getElementById('mod').value=''; render(); } catch(e){ parent.Toast.show(e.message); }
+  }
+  function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  window.addEventListener('DOMContentLoaded', render);
+  function onJobsSynchronized() { render(); }
+</script>
+</body>
+</html>

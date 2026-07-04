@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff"><title>TAGRO OS — Staff Login</title>
+<link rel="stylesheet" href="os-shell.css"><script src="os-manifest.js"></script><script src="os-core.js"></script>
+</head>
+<body class="login-page">
+<section class="login-brand-panel" aria-label="TAGRO">
+  <div class="brand-logo"><img src="tagro-logo.png" alt="TAGRO"></div>
+  <div class="brand-story"><p class="eyebrow" style="color:#fff3eb">Workshop operating system</p><h1>Clear work.<br>Honest records.</h1><p>One calm workspace for customers, machines, parts, service jobs and every branch.</p></div>
+  <div class="brand-foot">Honesty · Cleanliness · Better work</div>
+</section>
+<main class="login-form-panel">
+  <section class="login-card" aria-labelledby="login-heading">
+    <p class="eyebrow">Staff login</p><h2 id="login-heading">Welcome back</h2><p class="intro">Choose your business branch and name, then enter your PIN.</p>
+    <form id="login-form">
+      <div class="field"><label for="branch">Business branch</label><select class="control" id="branch" disabled><option>Loading branches…</option></select></div>
+      <div class="field"><label for="staff">Staff member</label><select class="control" id="staff" disabled><option>Select a branch first</option></select></div>
+      <div class="field"><label for="pin">PIN</label><div class="pin-wrap"><input class="control" id="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8" placeholder="••••" disabled><button class="pin-toggle" id="pin-toggle" type="button">Show</button></div></div>
+      <button class="primary-button" id="submit" type="submit" disabled>Enter TAGRO OS</button>
+      <div class="form-message info" id="message" role="status" aria-live="polite">Connecting securely…</div>
+    </form>
+    <div class="secure-note"><span class="secure-dot"></span>Secure cloud session</div>
+  </section>
+</main>
+<script>
+const branch=document.getElementById('branch'),staff=document.getElementById('staff'),pin=document.getElementById('pin'),submit=document.getElementById('submit'),message=document.getElementById('message');
+boot();
+async function boot(){const current=await Session.restore();if(current){location.replace('index.html');return;}await loadBranches();}
+async function loadBranches(){setMessage('Loading branches…',true);try{const data=await fetchJson('/public/branches');branch.innerHTML='<option value="">Select a branch</option>';for(const item of data.branches){const option=document.createElement('option');option.value=item.code;option.textContent=item.code+' — '+item.name;branch.appendChild(option);}branch.disabled=!data.branches.length;setMessage(data.branches.length?'':'No branches are configured.',true);}catch(error){branch.innerHTML='<option>Cloud unavailable</option>';setMessage(error.message,false);}}
+branch.addEventListener('change',async()=>{resetStaff();if(!branch.value)return;staff.innerHTML='<option>Loading staff…</option>';try{const data=await fetchJson('/public/staff?branch='+encodeURIComponent(branch.value));staff.innerHTML='<option value="">Select your name</option>';for(const person of data.staff){const option=document.createElement('option');option.value=person.id;option.textContent=person.name+(person.role!=='staff'?' · '+title(person.role):'');staff.appendChild(option);}staff.disabled=!data.staff.length;setMessage(data.staff.length?'':'No active staff accounts for this branch.',true);}catch(error){resetStaff();setMessage(error.message,false);}});
+staff.addEventListener('change',()=>{const ready=Boolean(staff.value);pin.disabled=!ready;submit.disabled=!ready;if(ready)pin.focus();});
+pin.addEventListener('input',()=>{pin.value=pin.value.replace(/[^0-9]/g,'');});
+document.getElementById('pin-toggle').addEventListener('click',()=>{const show=pin.type==='password';pin.type=show?'text':'password';document.getElementById('pin-toggle').textContent=show?'Hide':'Show';});
+document.getElementById('login-form').addEventListener('submit',async event=>{event.preventDefault();if(!staff.value||!/^\d{4,8}$/.test(pin.value)){setMessage('Enter your 4–8 digit PIN.',false);return;}submit.disabled=true;submit.textContent='Checking…';setMessage('Signing in securely…',true);try{const response=await fetch(TAGRO_MANIFEST.api+'/auth/login',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({staffId:staff.value,pin:pin.value})});const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'Login failed.');Session.set(data.staff);location.replace('index.html');}catch(error){pin.value='';pin.focus();submit.disabled=false;submit.textContent='Enter TAGRO OS';setMessage(error.message,false);}});
+async function fetchJson(path){const response=await fetch(TAGRO_MANIFEST.api+path,{headers:{Accept:'application/json'}});const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'Unable to connect.');return data;}
+function resetStaff(){staff.innerHTML='<option value="">Select a branch first</option>';staff.disabled=true;pin.value='';pin.disabled=true;submit.disabled=true;}
+function setMessage(text,info){message.textContent=text;message.classList.toggle('info',Boolean(info));}
+function title(value){return value.charAt(0).toUpperCase()+value.slice(1);}
+</script>
+</body></html>

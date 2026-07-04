@@ -1,0 +1,21 @@
+{
+  "name": "tagro-os",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply tagro-os --local",
+    "db:migrate:remote": "wrangler d1 migrations apply tagro-os --remote"
+  },
+  "devDependencies": {
+    "wrangler": "^4.24.3"
+  },
+  "type": "module",
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
+  }
+}

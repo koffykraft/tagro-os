@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>Teardown & Diagnostics</title>
+<style>
+  body { font-family:-apple-system,sans-serif; background:#f0ede8; padding:16px; margin:0; }
+  .card { background:#fff; padding:16px; border-radius:12px; margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.04); }
+  textarea { width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; font-family:inherit; resize:none; }
+  .btn { width:100%; padding:12px; background:#df6427; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer; }
+  .node { background:#fafafa; border:1px solid #ddd; padding:10px; border-radius:6px; font-size:13px; margin-bottom:6px; font-weight:600; }
+</style>
+</head>
+<body>
+<div class="card"><h1 id="wo" style="color:#df6427; margin:0; font-size:20px;">WO-LOADING</h1></div>
+<div class="card" id="panel-start">
+  <h2>Intake Diagnostics</h2>
+  <button class="btn" onclick="start()">Initialize Physical Teardown</button>
+</div>
+<div class="card" id="panel-complete" style="display:none;">
+  <h2>Discovery Chain Log</h2>
+  <div style="display:flex; gap:6px; margin-bottom:12px;">
+    <select id="sel-chain" style="flex:1; padding:10px; border-radius:6px; border:1px solid #ccc;">
+      <option value="Broken Clutch Spring">Broken Clutch Spring</option>
+      <option value="Loose Clutch Assembly">Loose Clutch Assembly</option>
+      <option value="Bearing Seizure">Bearing Seizure</option>
+      <option value="Crankshaft Wear Offset">Crankshaft Wear Offset</option>
+    </select>
+    <button class="btn" style="width:auto; padding:0 16px;" onclick="addNode()">+</button>
+  </div>
+  <div id="chain-stack"></div>
+  <h2 style="font-size:14px;">Teardown Notes</h2>
+  <textarea id="txt-findings" rows="3" placeholder="Input diagnostics summary..."></textarea>
+  <button class="btn" style="background:#166534;" onclick="complete()">Publish Findings File</button>
+</div>
+<div style="display:flex; gap:10px; margin-top:12px;">
+  <button class="btn" style="background:#6b7280; flex:1;" onclick="parent.AppLauncher.open('jobs')">← Back</button>
+  <button class="btn" style="background:#4b5563; flex:1;" onclick="parent.AppLauncher.open('estimate', id)">Quotations ➔</button>
+</div>
+<script>
+  let id = new URLSearchParams(window.location.search).get('jobId');
+  let chain = [];
+  window.addEventListener('DOMContentLoaded', load);
+  function load() {
+    document.getElementById('wo').textContent = id || 'No Job Parameter';
+    const j = parent.Jobs.find(id); if(!j) return;
+    const tl = j.timeline || [];
+    if(tl.some(e=>e.type==='inspection_started') && !tl.some(e=>e.type==='inspection_completed')) {
+      document.getElementById('panel-start').style.display = 'none';
+      document.getElementById('panel-complete').style.display = 'block';
+    } else if(tl.some(e=>e.type==='inspection_completed')) {
+      document.getElementById('panel-start').innerHTML = '<div class="node" style="color:#166534; background:#f0fdf4;">✓ Teardown analysis verified and published.</div>';
+    }
+  }
+  async function start() {
+    const p = parent.TAGRO_CORE.EventFactory.build({id}, 'inspection_started', {}, parent.Session.get());
+    try { await parent.TAGRO_CORE.persist(id, p, parent.Session.get(), 'app-inspection'); load(); } catch(e){ parent.Toast.show(e.message); }
+  }
+  function addNode() {
+    const v = document.getElementById('sel-chain').value; if(chain.includes(v)) return;
+    chain.push(v); const d = document.createElement('div'); d.className='node'; d.textContent='↳ ' + v; document.getElementById('chain-stack').appendChild(d);
+  }
+  async function complete() {
+    const f = document.getElementById('txt-findings').value.trim(); if(!f) return;
+    const p1 = parent.TAGRO_CORE.EventFactory.build({id}, 'workshop_diagnostic_discovery', { failureChain: chain }, parent.Session.get());
+    const p2 = parent.TAGRO_CORE.EventFactory.build({id}, 'inspection_completed', { findings: f }, parent.Session.get());
+    try { await parent.TAGRO_CORE.persist(id, p1, parent.Session.get(), 'app-inspection'); await parent.TAGRO_CORE.persist(id, p2, parent.Session.get(), 'app-inspection'); load(); } catch(e){ parent.Toast.show(e.message); }
+  }
+  function onJobsSynchronized() { load(); }
+</script>
+</body>
+</html>

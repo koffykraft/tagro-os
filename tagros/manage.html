@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en-IN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff"><meta name="apple-mobile-web-app-capable" content="yes">
+<title>TAGRO OS</title><link rel="manifest" href="manifest.json"><link rel="stylesheet" href="os-shell.css">
+<script src="os-manifest.js"></script><script src="os-icons.js"></script><script src="os-core.js"></script>
+</head>
+<body>
+<div class="top-accent"></div>
+<header class="topbar">
+  <a class="brand-logo" href="index.html" aria-label="TAGRO OS home"><img src="tagro-logo.png" alt="TAGRO"></a>
+  <div class="topbar-meta">
+    <span class="branch-chip" id="branch-chip">—</span>
+    <button class="profile-button" id="profile-button" type="button" title="Log out">
+      <span class="profile-name" id="profile-name"></span><span class="avatar" id="avatar">T</span>
+    </button>
+  </div>
+</header>
+<main class="shell">
+  <section class="welcome">
+    <div><p class="eyebrow">TAGRO workspace</p><h1 id="welcome-title">Good work starts here.</h1><p id="welcome-subtitle">Choose an application to continue.</p></div>
+  </section>
+  <section aria-labelledby="apps-heading">
+    <div class="section-title"><h2 id="apps-heading">Applications</h2><span id="app-count"></span></div>
+    <div class="app-grid" id="app-grid"></div>
+  </section>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+window.addEventListener('DOMContentLoaded', boot);
+async function boot(){
+  const session=await Session.restore();
+  if(!session){location.replace('login.html');return;}
+  document.getElementById('branch-chip').textContent=session.branch;
+  document.getElementById('profile-name').textContent=session.name;
+  document.getElementById('avatar').textContent=initials(session.name);
+  document.getElementById('welcome-title').textContent='Welcome, '+firstName(session.name)+'.';
+  document.getElementById('welcome-subtitle').textContent=session.branchName+' · One clear place for every part of the business.';
+  renderApps(session);
+}
+function renderApps(session){
+  const apps=TAGRO_MANIFEST.apps.filter(app=>TAGRO_MANIFEST.canAccess(app,session));
+  document.getElementById('app-count').textContent=apps.length+' available';
+  const grid=document.getElementById('app-grid'); grid.innerHTML='';
+  for(const app of apps){
+    const button=document.createElement('button'); button.type='button'; button.className='app-card';
+    button.innerHTML='<span class="app-icon">'+(ICONS[app.icon]||'')+'</span><span class="app-name">'+OS.esc(app.label)+'</span><span class="app-description">'+OS.esc(app.description)+'</span><span class="app-status '+(app.next?'next':'')+'">'+(app.next?'Build next':app.ready?'Ready':'Planned')+'</span>';
+    button.addEventListener('click',()=>{if(app.ready)location.href=app.file;else Toast.show(app.next?app.label+' is the next app we will build.':app.label+' will be added step by step.');});
+    grid.appendChild(button);
+  }
+}
+document.getElementById('profile-button').addEventListener('click',async()=>{if(!confirm('Log out of TAGRO OS?'))return;await Session.logout();location.replace('login.html');});
+function initials(name){return String(name||'T').split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();}
+function firstName(name){return String(name||'there').trim().split(/\s+/)[0];}
+if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+</script>
+</body></html>

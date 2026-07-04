@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Branches — TAGRO OS</title>
+<link rel="stylesheet" href="os-shell.css">
+<script src="os-manifest.js"></script>
+<script src="os-core.js"></script>
+</head>
+<body>
+<header class="app-topbar">
+  <a class="back-button" href="index.html" aria-label="Back to applications">‹</a>
+  <div class="app-topbar-title"><strong>Branches</strong><span>Business locations</span></div>
+  <a class="brand-logo" href="index.html"><img src="tagro-logo.png" alt="TAGRO"></a>
+</header>
+
+<main class="app-workspace">
+  <section class="page-heading">
+    <div><p class="eyebrow">Business locations</p><h1>Every branch, clearly defined.</h1><p>Keep addresses and contact details accurate for staff and customers.</p></div>
+    <button class="secondary-button orange hidden" id="new-branch" type="button">+ New branch</button>
+  </section>
+
+  <div class="customer-layout">
+    <section class="panel">
+      <div class="panel-head"><h2>Branch locations</h2><button class="text-button" id="refresh-button" type="button">Refresh</button></div>
+      <div class="panel-body">
+        <div class="customer-list" id="branch-list"></div>
+        <div class="empty-state hidden" id="branch-empty"><div class="empty-state-icon">⌂</div><strong>No branches found</strong><p>Create the first business location.</p></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2 id="side-title">Branch details</h2></div>
+      <div class="panel-body">
+        <div class="empty-state" id="detail-empty"><div class="empty-state-icon">⌂</div><strong>Select a branch</strong><p>Choose a location to view or update its details.</p></div>
+        <div class="customer-detail hidden" id="branch-detail">
+          <span class="detail-code" id="detail-code"></span>
+          <h3 class="detail-name" id="detail-name"></h3>
+          <div class="detail-list" id="detail-list"></div>
+          <div class="detail-actions"><button class="secondary-button orange" id="edit-button" type="button">Edit branch</button></div>
+        </div>
+
+        <form class="hidden" id="branch-form">
+          <input type="hidden" id="branch-id">
+          <div class="form-grid">
+            <div class="field"><label for="branch-code">Branch code *</label><input class="control" id="branch-code" maxlength="12" required autocapitalize="characters"></div>
+            <div class="field"><label for="branch-name">Branch name *</label><input class="control" id="branch-name" maxlength="120" required></div>
+            <div class="field full"><label for="address-line-1">Address line 1</label><input class="control" id="address-line-1" maxlength="180"></div>
+            <div class="field full"><label for="address-line-2">Address line 2</label><input class="control" id="address-line-2" maxlength="180"></div>
+            <div class="field"><label for="branch-city">City / Town</label><input class="control" id="branch-city" maxlength="100"></div>
+            <div class="field"><label for="branch-state">State</label><input class="control" id="branch-state" maxlength="100"></div>
+            <div class="field"><label for="postal-code">Postal code</label><input class="control" id="postal-code" maxlength="12" inputmode="numeric"></div>
+            <div class="field"><label for="branch-phone">Branch phone</label><input class="control" id="branch-phone" maxlength="20" type="tel" inputmode="tel"></div>
+          </div>
+          <div class="form-actions"><button class="secondary-button" id="cancel-button" type="button">Cancel</button><button class="primary-button save-button" id="save-button" type="submit">Save branch</button></div>
+          <div class="inline-message" id="form-message" role="status" aria-live="polite"></div>
+        </form>
+      </div>
+    </section>
+  </div>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+let currentSession = null;
+let selectedBranch = null;
+
+const branchList = document.getElementById('branch-list');
+const branchEmpty = document.getElementById('branch-empty');
+const form = document.getElementById('branch-form');
+const detail = document.getElementById('branch-detail');
+const detailEmpty = document.getElementById('detail-empty');
+const formMessage = document.getElementById('form-message');
+
+window.addEventListener('DOMContentLoaded', boot);
+
+async function boot() {
+  currentSession = await Session.restore();
+  if (!currentSession) { location.replace('login.html'); return; }
+  if (!['manager', 'owner'].includes(String(currentSession.role).toLowerCase())) { location.replace('index.html'); return; }
+  document.getElementById('new-branch').classList.toggle('hidden', String(currentSession.role).toLowerCase() !== 'owner');
+  await loadBranches();
+}
+
+async function loadBranches() {
+  branchList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">…</div><strong>Loading branches</strong></div>';
+  branchEmpty.classList.add('hidden');
+  try {
+    const data = await Api.request('/branches');
+    renderBranches(data.branches || []);
+  } catch (error) {
+    branchList.innerHTML = '';
+    branchEmpty.classList.remove('hidden');
+    branchEmpty.querySelector('strong').textContent = 'Unable to load branches';
+    branchEmpty.querySelector('p').textContent = error.message;
+  }
+}
+
+function renderBranches(branches) {
+  branchList.innerHTML = '';
+  branchEmpty.classList.toggle('hidden', branches.length > 0);
+  for (const branch of branches) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'customer-row' + (selectedBranch?.id === branch.id ? ' selected' : '');
+    row.innerHTML =
+      '<span class="customer-initial">⌂</span>' +
+      '<span class="customer-main"><strong>' + OS.esc(branch.name) + '</strong><span>' +
+      OS.esc([branch.city, branch.state].filter(Boolean).join(', ') || 'Address not recorded') + '</span></span>' +
+      '<span class="customer-code">' + OS.esc(branch.code) + '</span>';
+    row.addEventListener('click', () => showBranch(branch));
+    branchList.appendChild(row);
+  }
+}
+
+function showBranch(branch) {
+  selectedBranch = branch;
+  form.classList.add('hidden');
+  detailEmpty.classList.add('hidden');
+  detail.classList.remove('hidden');
+  document.getElementById('side-title').textContent = 'Branch details';
+  document.getElementById('detail-code').textContent = branch.code;
+  document.getElementById('detail-name').textContent = branch.name;
+  document.getElementById('detail-list').innerHTML = [
+    detailItem('Address', [branch.address_line_1, branch.address_line_2].filter(Boolean).join('\n')),
+    detailItem('City / Town', branch.city),
+    detailItem('State', branch.state),
+    detailItem('Postal code', branch.postal_code),
+    detailItem('Phone', branch.phone),
+    detailItem('Status', branch.active ? 'Active' : 'Inactive')
+  ].join('');
+  document.querySelectorAll('.customer-row').forEach(row => row.classList.toggle('selected', row.querySelector('.customer-code')?.textContent === branch.code));
+}
+
+function detailItem(label, value) {
+  return '<div class="detail-item"><label>' + OS.esc(label) + '</label><div>' + OS.esc(value || 'Not recorded') + '</div></div>';
+}
+
+function openForm(branch = null) {
+  selectedBranch = branch;
+  detail.classList.add('hidden');
+  detailEmpty.classList.add('hidden');
+  form.classList.remove('hidden');
+  document.getElementById('side-title').textContent = branch ? 'Edit branch' : 'New branch';
+  document.getElementById('branch-id').value = branch?.id || '';
+  document.getElementById('branch-code').value = branch?.code || '';
+  document.getElementById('branch-name').value = branch?.name || '';
+  document.getElementById('address-line-1').value = branch?.address_line_1 || '';
+  document.getElementById('address-line-2').value = branch?.address_line_2 || '';
+  document.getElementById('branch-city').value = branch?.city || '';
+  document.getElementById('branch-state').value = branch?.state || '';
+  document.getElementById('postal-code').value = branch?.postal_code || '';
+  document.getElementById('branch-phone').value = branch?.phone || '';
+  document.getElementById('save-button').textContent = branch ? 'Save changes' : 'Save branch';
+  formMessage.textContent = '';
+  document.getElementById('branch-code').focus();
+}
+
+function closeForm() {
+  form.classList.add('hidden');
+  if (selectedBranch) showBranch(selectedBranch);
+  else detailEmpty.classList.remove('hidden');
+}
+
+form.addEventListener('submit', async event => {
+  event.preventDefault();
+  const branchId = document.getElementById('branch-id').value;
+  const payload = {
+    code: document.getElementById('branch-code').value,
+    name: document.getElementById('branch-name').value,
+    addressLine1: document.getElementById('address-line-1').value,
+    addressLine2: document.getElementById('address-line-2').value,
+    city: document.getElementById('branch-city').value,
+    state: document.getElementById('branch-state').value,
+    postalCode: document.getElementById('postal-code').value,
+    phone: document.getElementById('branch-phone').value
+  };
+  const saveButton = document.getElementById('save-button');
+  saveButton.disabled = true;
+  formMessage.className = 'inline-message';
+  formMessage.textContent = 'Saving securely…';
+  try {
+    const data = await Api.request(branchId ? '/branches/' + encodeURIComponent(branchId) : '/branches', {
+      method: branchId ? 'PUT' : 'POST',
+      body: JSON.stringify(payload)
+    });
+    selectedBranch = data.branch;
+    Toast.show(branchId ? 'Branch updated.' : 'Branch created.');
+    await loadBranches();
+    showBranch(data.branch);
+  } catch (error) {
+    formMessage.textContent = error.message;
+  } finally {
+    saveButton.disabled = false;
+  }
+});
+
+document.getElementById('new-branch').addEventListener('click', () => openForm());
+document.getElementById('edit-button').addEventListener('click', () => openForm(selectedBranch));
+document.getElementById('cancel-button').addEventListener('click', closeForm);
+document.getElementById('refresh-button').addEventListener('click', loadBranches);
+</script>
+</body>
+</html>

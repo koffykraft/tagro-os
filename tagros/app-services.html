@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff"><title>Service Rates — TAGRO OS</title>
+<link rel="stylesheet" href="os-shell.css"><script src="os-manifest.js"></script><script src="os-core.js"></script>
+</head>
+<body>
+<header class="app-topbar"><a class="back-button" href="index.html" aria-label="Back to applications">‹</a><div class="app-topbar-title"><strong>Service Rates</strong><span>Labour and standard charges</span></div><a class="brand-logo" href="index.html"><img src="tagro-logo.png" alt="TAGRO"></a></header>
+<main class="app-workspace">
+  <section class="page-heading"><div><p class="eyebrow">Labour master</p><h1>Consistent rates for good work.</h1><p>Define reusable labour names, expected time, SAC, GST and standard pricing. Actual customer work remains under Repair Jobs.</p></div><button class="secondary-button orange hidden" id="new-service" type="button">+ New service rate</button></section>
+  <section class="search-panel"><div class="catalog-toolbar"><input class="control" id="service-search" type="search" placeholder="Search service job names or descriptions"><span id="service-count" style="color:var(--muted);font-size:12px"></span></div></section>
+  <div class="model-grid" id="service-grid" style="padding:0;margin-top:18px"></div>
+  <div class="empty-state hidden" id="service-empty"><div class="empty-state-icon">◇</div><strong>No service jobs found</strong><p>Create the first standard repair job.</p></div>
+</main>
+<div class="toast" id="toast"></div>
+
+<div class="modal-backdrop hidden" id="service-modal">
+  <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="service-title" style="width:min(100%,620px)">
+    <div class="modal-head"><h2 id="service-title">New service job</h2><button class="modal-close" id="close-modal" type="button">×</button></div>
+    <form class="modal-body" id="service-form">
+      <input type="hidden" id="service-id">
+      <div class="form-grid">
+        <div class="field full"><label for="service-name">Service repair job name *</label><input class="control" id="service-name" maxlength="160" required placeholder="Example: Carburetor Service"></div>
+        <div class="field full"><label for="service-description">Description</label><textarea class="control" id="service-description" maxlength="1000"></textarea></div>
+        <div class="field"><label for="standard-minutes">Standard minutes</label><input class="control" id="standard-minutes" type="number" min="1" step="1" placeholder="Optional"></div>
+        <div class="field"><label for="default-price">Default price</label><input class="control" id="default-price" type="number" min="0" step="0.01" placeholder="Optional"></div>
+        <div class="field"><label for="service-hsn">HSN / SAC *</label><input class="control" id="service-hsn" maxlength="30" required></div>
+        <div class="field"><label for="service-gst">GST % *</label><input class="control" id="service-gst" type="number" min="0" max="100" step="0.01" required></div>
+      </div>
+      <div class="form-actions"><button class="secondary-button" id="cancel-button" type="button">Cancel</button><button class="primary-button save-button" id="save-button" type="submit">Save service job</button></div>
+      <div class="inline-message" id="form-message"></div>
+    </form>
+  </section>
+</div>
+
+<script>
+let session = null;
+let services = [];
+const grid = document.getElementById('service-grid');
+const empty = document.getElementById('service-empty');
+const modal = document.getElementById('service-modal');
+const search = document.getElementById('service-search');
+
+window.addEventListener('DOMContentLoaded', boot);
+async function boot() {
+  session = await Session.restore();
+  if (!session) { location.replace('login.html'); return; }
+  document.getElementById('new-service').classList.toggle('hidden', !['manager','owner'].includes(String(session.role).toLowerCase()));
+  await loadServices();
+}
+async function loadServices() {
+  grid.innerHTML = '<div class="empty-state"><strong>Loading service jobs…</strong></div>';
+  try { const data = await Api.request('/service-types'); services = data.serviceTypes || []; render(); }
+  catch (error) { grid.innerHTML = ''; empty.classList.remove('hidden'); empty.querySelector('strong').textContent = 'Unable to load service jobs'; empty.querySelector('p').textContent = error.message; }
+}
+function render() {
+  const term = search.value.trim().toLowerCase();
+  const visible = services.filter(service => !term || [service.name, service.description].some(value => String(value || '').toLowerCase().includes(term)));
+  grid.innerHTML = ''; empty.classList.toggle('hidden', visible.length > 0); document.getElementById('service-count').textContent = visible.length + ' service job' + (visible.length === 1 ? '' : 's');
+  for (const service of visible) {
+    const card = document.createElement('article'); card.className = 'model-card';
+    card.innerHTML = '<strong>' + OS.esc(service.name) + '</strong><span>' + OS.esc(service.hsn_sac) + ' · GST ' + number(service.gst_rate) + '%</span><p>' + OS.esc(service.description || 'No description') + '</p><p><b>' + (service.standard_minutes ? service.standard_minutes + ' min' : 'Time not set') + '</b> · ' + (service.default_price === null ? 'Price not set' : money(service.default_price)) + '</p>';
+    if (['manager','owner'].includes(String(session.role).toLowerCase())) { card.style.cursor = 'pointer'; card.addEventListener('click', () => openForm(service)); }
+    grid.appendChild(card);
+  }
+}
+function openForm(service = null) {
+  document.getElementById('service-title').textContent = service ? 'Edit service job' : 'New service job';
+  set('service-id', service?.id || ''); set('service-name', service?.name || ''); set('service-description', service?.description || ''); set('standard-minutes', service?.standard_minutes ?? ''); set('default-price', service?.default_price ?? ''); set('service-hsn', service?.hsn_sac || ''); set('service-gst', service?.gst_rate ?? '');
+  document.getElementById('save-button').textContent = service ? 'Save changes' : 'Save service job'; document.getElementById('form-message').textContent = ''; modal.classList.remove('hidden'); document.getElementById('service-name').focus();
+}
+function closeModal() { modal.classList.add('hidden'); document.getElementById('service-form').reset(); }
+document.getElementById('service-form').addEventListener('submit', async event => {
+  event.preventDefault(); const id = val('service-id'); const button = document.getElementById('save-button'); const message = document.getElementById('form-message'); button.disabled = true; message.textContent = 'Saving securely…';
+  try { await Api.request(id ? '/service-types/' + encodeURIComponent(id) : '/service-types', { method:id ? 'PUT' : 'POST', body:JSON.stringify({ name:val('service-name'), description:val('service-description'), standardMinutes:val('standard-minutes'), defaultPrice:val('default-price'), hsnSac:val('service-hsn'), gstRate:val('service-gst') }) }); closeModal(); Toast.show(id ? 'Service job updated.' : 'Service job created.'); await loadServices(); }
+  catch (error) { message.textContent = error.message; } finally { button.disabled = false; }
+});
+document.getElementById('new-service').addEventListener('click', () => openForm());
+document.getElementById('close-modal').addEventListener('click', closeModal);
+document.getElementById('cancel-button').addEventListener('click', closeModal);
+search.addEventListener('input', render);
+function val(id) { return document.getElementById(id).value.trim(); } function set(id,v) { document.getElementById(id).value = v; }
+function number(v) { return Number(v).toFixed(Number(v) % 1 ? 2 : 0); } function money(v) { return '₹' + Number(v).toLocaleString('en-IN', { maximumFractionDigits:2 }); }
+</script>
+</body>
+</html>

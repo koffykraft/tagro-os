@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff"><title>Machines — TAGRO OS</title>
+<link rel="stylesheet" href="os-shell.css"><script src="os-manifest.js"></script><script src="os-core.js"></script>
+</head>
+<body>
+<header class="app-topbar"><a class="back-button" href="index.html" aria-label="Back to applications">‹</a><div class="app-topbar-title"><strong>Machines</strong><span>Make and model directory</span></div><a class="brand-logo" href="index.html"><img src="tagro-logo.png" alt="TAGRO"></a></header>
+<main class="app-workspace">
+  <section class="page-heading"><div><p class="eyebrow">Machine directory</p><h1>One trusted model list.</h1><p>Standardise machine names and useful specifications across every branch.</p></div></section>
+  <section class="search-panel">
+    <div class="catalog-toolbar">
+      <input class="control" id="machine-search" type="search" placeholder="Search manufacturer, model or machine type">
+      <button class="secondary-button orange hidden" id="add-make" type="button">+ Manufacturer</button>
+      <button class="primary-button save-button hidden" id="add-model" type="button">+ Model</button>
+    </div>
+  </section>
+  <div class="model-groups" id="model-groups" style="margin-top:18px"></div>
+  <div class="empty-state hidden" id="machine-empty"><div class="empty-state-icon">◇</div><strong>No machine models found</strong><p>Add a manufacturer and its first model.</p></div>
+</main>
+<div class="toast" id="toast"></div>
+
+<div class="modal-backdrop hidden" id="make-modal">
+  <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="make-title">
+    <div class="modal-head"><h2 id="make-title">New manufacturer</h2><button class="modal-close" type="button" data-close>×</button></div>
+    <form class="modal-body" id="make-form"><div class="field"><label for="make-name">Manufacturer name *</label><input class="control" id="make-name" maxlength="100" required placeholder="Example: STIHL"></div><button class="primary-button" type="submit">Save manufacturer</button><div class="inline-message" id="make-message"></div></form>
+  </section>
+</div>
+
+<div class="modal-backdrop hidden" id="model-modal">
+  <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="model-title">
+    <div class="modal-head"><h2 id="model-title">New machine model</h2><button class="modal-close" type="button" data-close>×</button></div>
+    <form class="modal-body" id="model-form">
+      <div class="field"><label for="model-make">Manufacturer *</label><select class="control" id="model-make" required></select></div>
+      <div class="field"><label for="model-name">Model name *</label><input class="control" id="model-name" maxlength="120" required placeholder="Example: MS 250"></div>
+      <div class="field"><label for="machine-type">Machine type *</label><input class="control" id="machine-type" maxlength="100" required placeholder="Example: Chainsaw"></div>
+      <div class="field"><label for="specification-notes">Specification notes</label><textarea class="control" id="specification-notes" maxlength="1500" placeholder="Engine, capacity, bar size or other useful identification details"></textarea></div>
+      <button class="primary-button" type="submit">Save model</button><div class="inline-message" id="model-message"></div>
+    </form>
+  </section>
+</div>
+
+<script>
+let session = null;
+let catalog = { makes: [], models: [] };
+const groups = document.getElementById('model-groups');
+const empty = document.getElementById('machine-empty');
+const search = document.getElementById('machine-search');
+
+window.addEventListener('DOMContentLoaded', boot);
+async function boot() {
+  session = await Session.restore();
+  if (!session) { location.replace('login.html'); return; }
+  const canEdit = ['manager', 'owner'].includes(String(session.role).toLowerCase());
+  document.getElementById('add-make').classList.toggle('hidden', !canEdit);
+  document.getElementById('add-model').classList.toggle('hidden', !canEdit);
+  await loadCatalog();
+}
+
+async function loadCatalog() {
+  groups.innerHTML = '<div class="empty-state"><div class="empty-state-icon">…</div><strong>Loading machine directory</strong></div>';
+  try {
+    catalog = await Api.request('/machine-catalog');
+    populateMakes();
+    renderCatalog();
+  } catch (error) {
+    groups.innerHTML = '';
+    empty.classList.remove('hidden');
+    empty.querySelector('strong').textContent = 'Unable to load machines';
+    empty.querySelector('p').textContent = error.message;
+  }
+}
+
+function renderCatalog() {
+  const term = search.value.trim().toLowerCase();
+  const models = catalog.models.filter(model => !term || [model.make_name, model.model_name, model.machine_type].some(value => String(value || '').toLowerCase().includes(term)));
+  const grouped = new Map();
+  for (const make of catalog.makes) grouped.set(make.id, { make, models: [] });
+  for (const model of models) if (grouped.has(model.make_id)) grouped.get(model.make_id).models.push(model);
+  groups.innerHTML = '';
+  const visible = [...grouped.values()].filter(group => group.models.length || !term);
+  empty.classList.toggle('hidden', visible.length > 0);
+  for (const group of visible) {
+    const section = document.createElement('section');
+    section.className = 'model-group';
+    section.innerHTML = '<div class="model-group-head"><strong>' + OS.esc(group.make.name) + '</strong><span>' + group.models.length + ' model' + (group.models.length === 1 ? '' : 's') + '</span></div><div class="model-grid">' +
+      (group.models.length ? group.models.map(model => '<article class="model-card"><strong>' + OS.esc(model.model_name) + '</strong><span>' + OS.esc(model.machine_type) + '</span><p>' + OS.esc(specNotes(model.specifications_json) || 'No specifications recorded') + '</p></article>').join('') : '<div class="empty-state" style="grid-column:1/-1;padding:24px"><strong>No models yet</strong></div>') + '</div>';
+    groups.appendChild(section);
+  }
+}
+
+function specNotes(value) {
+  try { return JSON.parse(value || '{}').notes || ''; } catch { return ''; }
+}
+
+function populateMakes() {
+  const select = document.getElementById('model-make');
+  select.innerHTML = '<option value="">Select manufacturer</option>';
+  for (const make of catalog.makes) {
+    const option = document.createElement('option');
+    option.value = make.id; option.textContent = make.name; select.appendChild(option);
+  }
+}
+
+function openModal(id) {
+  document.getElementById(id).classList.remove('hidden');
+  const first = document.getElementById(id).querySelector('input,select');
+  if (first) first.focus();
+}
+function closeModals() { document.querySelectorAll('.modal-backdrop').forEach(modal => modal.classList.add('hidden')); }
+
+document.getElementById('add-make').addEventListener('click', () => openModal('make-modal'));
+document.getElementById('add-model').addEventListener('click', () => {
+  if (!catalog.makes.length) { Toast.show('Add a manufacturer first.'); return; }
+  openModal('model-modal');
+});
+document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', closeModals));
+search.addEventListener('input', renderCatalog);
+
+document.getElementById('make-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const message = document.getElementById('make-message');
+  message.textContent = 'Saving…';
+  try {
+    await Api.request('/machine-makes', { method:'POST', body:JSON.stringify({ name:document.getElementById('make-name').value }) });
+    event.target.reset(); closeModals(); Toast.show('Manufacturer added.'); await loadCatalog();
+  } catch (error) { message.textContent = error.message; }
+});
+
+document.getElementById('model-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const message = document.getElementById('model-message');
+  message.textContent = 'Saving…';
+  try {
+    await Api.request('/machine-models', { method:'POST', body:JSON.stringify({
+      makeId:document.getElementById('model-make').value,
+      modelName:document.getElementById('model-name').value,
+      machineType:document.getElementById('machine-type').value,
+      specificationNotes:document.getElementById('specification-notes').value
+    }) });
+    event.target.reset(); closeModals(); Toast.show('Machine model added.'); await loadCatalog();
+  } catch (error) { message.textContent = error.message; }
+});
+</script>
+</body>
+</html>

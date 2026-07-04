@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff"><title>Reports — TAGRO OS</title>
+<link rel="stylesheet" href="os-shell.css"><script src="os-manifest.js"></script><script src="os-core.js"></script>
+</head>
+<body>
+<header class="app-topbar"><a class="back-button" href="index.html" aria-label="Back to applications">‹</a><div class="app-topbar-title"><strong>Reports</strong><span id="branch-label">Operational overview</span></div><a class="brand-logo" href="index.html"><img src="tagro-logo.png" alt="TAGRO"></a></header>
+<main class="app-workspace">
+  <section class="page-heading"><div><p class="eyebrow">Live operations</p><h1>See what needs attention.</h1><p>Cloud totals for service work, customers, staff and catalog review.</p></div><span class="report-updated" id="report-updated">Loading current data…</span></section>
+  <section class="search-panel"><div class="catalog-toolbar">
+    <select class="control hidden" id="report-branch" style="max-width:250px"><option value="all">All branches</option></select>
+    <select class="control" id="report-days" style="max-width:210px"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option><option value="all">All time</option></select>
+    <button class="secondary-button" id="refresh-report" type="button">Refresh report</button>
+  </div></section>
+
+  <section class="report-kpis" id="report-kpis"></section>
+  <div class="report-layout">
+    <section class="panel"><div class="panel-head"><h2>Current job status</h2><span id="status-total" style="color:var(--muted);font-size:11px"></span></div><div class="panel-body"><div class="status-report" id="status-report"></div></div></section>
+    <section class="panel"><div class="panel-head"><h2>Attention queue</h2></div><div class="panel-body" id="attention-report"></div></section>
+  </div>
+
+  <section class="panel" style="margin-top:18px">
+    <div class="panel-head"><h2>Recent repair jobs</h2><a class="text-button" href="app-jobs.html">Open Repair Jobs</a></div>
+    <div class="panel-body"><div class="report-job-list" id="recent-jobs"></div></div>
+  </section>
+  <section class="panel" style="margin-top:18px">
+    <div class="panel-head"><h2>Items requiring review</h2><a class="text-button" href="app-catalog.html">Open Items & Parts</a></div>
+    <div class="panel-body"><div class="review-report-list" id="review-items"></div></div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+let session=null,report=null,branches=[];
+const statusOrder=['received','inspecting','awaiting_approval','approved','repairing','paused','waiting_parts','ready','delivered','cancelled'];
+window.addEventListener('DOMContentLoaded',boot);
+async function boot(){
+  session=await Session.restore();if(!session){location.replace('login.html');return}
+  if(!['manager','owner'].includes(String(session.role).toLowerCase())){location.replace('index.html');return}
+  document.getElementById('branch-label').textContent=session.branchName;
+  if(String(session.role).toLowerCase()==='owner')await loadBranches();
+  await loadReport();
+}
+async function loadBranches(){
+  try{
+    const data=await Api.request('/branches');branches=(data.branches||[]).filter(branch=>branch.active);
+    const select=document.getElementById('report-branch');select.classList.remove('hidden');select.innerHTML='<option value="all">All branches</option>'+branches.map(branch=>'<option value="'+OS.esc(branch.id)+'">'+OS.esc(branch.code+' · '+branch.name)+'</option>').join('');
+  }catch(error){Toast.show(error.message)}
+}
+async function loadReport(){
+  document.getElementById('report-updated').textContent='Refreshing cloud data…';
+  const branchId=value('report-branch')||'all',days=value('report-days')||'30';
+  try{report=await Api.request('/reports/overview?branchId='+encodeURIComponent(branchId)+'&days='+encodeURIComponent(days));renderReport()}
+  catch(error){document.getElementById('report-updated').textContent='Unable to refresh';Toast.show(error.message)}
+}
+function renderReport(){
+  const metrics=report.metrics,scope=report.scope;
+  document.getElementById('branch-label').textContent=scope.branchName;
+  document.getElementById('report-updated').textContent='Updated '+new Date(report.generatedAt).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'});
+  document.getElementById('report-kpis').innerHTML=
+    kpi('Open jobs',metrics.openJobs,'In progress now','orange')+
+    kpi('Ready',metrics.readyForDelivery,'Awaiting delivery','green')+
+    kpi('Jobs opened',metrics.jobsOpened,periodLabel(scope.days),'blue')+
+    kpi('New customers',metrics.customersCreated,periodLabel(scope.days),'neutral')+
+    kpi('Active staff',metrics.activeStaff,scope.branchName,'neutral')+
+    kpi('Review items',metrics.reviewItems,'Check AI-assisted data',metrics.reviewItems?'amber':'green');
+  renderStatuses();renderAttention();renderRecentJobs();renderReviewItems();
+}
+function renderStatuses(){
+  const statuses=report.statuses||{},total=Object.values(statuses).reduce((sum,count)=>sum+Number(count||0),0);
+  document.getElementById('status-total').textContent=total+' total job'+(total===1?'':'s');
+  const container=document.getElementById('status-report');
+  const visible=statusOrder.filter(status=>Number(statuses[status]||0)>0);
+  if(!visible.length){container.innerHTML=emptyState('No repair jobs yet','Status totals will appear after the first machine is received.');return}
+  container.innerHTML=visible.map(status=>{const count=Number(statuses[status]||0),width=Math.max(5,Math.round(count/total*100));return '<div class="status-report-row"><div><span>'+OS.esc(report.statusLabels[status]||title(status))+'</span><strong>'+count+'</strong></div><div class="status-track"><i class="status-fill status-fill-'+OS.esc(status)+'" style="width:'+width+'%"></i></div></div>'}).join('');
+}
+function renderAttention(){
+  const items=[
+    {label:'Ready for customer',value:report.metrics.readyForDelivery,note:'Machines ready for delivery',tone:'green'},
+    {label:'Awaiting catalog review',value:report.metrics.reviewItems,note:'AI-assisted details to verify',tone:'amber'},
+    {label:'Waiting for parts',value:Number(report.statuses.waiting_parts||0),note:'Repair jobs blocked on parts',tone:'orange'},
+    {label:'Paused repairs',value:Number(report.statuses.paused||0),note:'Jobs needing a follow-up',tone:'neutral'}
+  ];
+  document.getElementById('attention-report').innerHTML='<div class="attention-list">'+items.map(item=>'<article><span class="attention-dot '+item.tone+'"></span><div><strong>'+OS.esc(item.label)+'</strong><small>'+OS.esc(item.note)+'</small></div><b>'+item.value+'</b></article>').join('')+'</div>';
+}
+function renderRecentJobs(){
+  const container=document.getElementById('recent-jobs'),jobs=report.recentJobs||[];
+  if(!jobs.length){container.innerHTML=emptyState('No jobs in this period','Choose a longer period or receive a machine.');return}
+  container.innerHTML=jobs.map(job=>'<a class="report-job-row" href="app-jobs.html"><span><strong>'+OS.esc(job.customer_name)+'</strong><small>'+OS.esc([job.make_name,job.model_name,job.serial_number].filter(Boolean).join(' · ')||'Machine details not recorded')+'</small></span><b>'+OS.esc(job.work_order)+'</b><span class="status-pill status-'+OS.esc(job.status)+'">'+OS.esc(job.status_label)+'</span><time>'+OS.esc(new Date(job.updated_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'}))+'</time></a>').join('');
+}
+function renderReviewItems(){
+  const container=document.getElementById('review-items'),items=report.reviewItems||[];
+  if(!items.length){container.innerHTML=emptyState('Review queue is clear','All catalog details are currently verified.');return}
+  container.innerHTML=items.map(item=>'<a class="review-report-row" href="app-catalog.html"><span class="review-flag">Check</span><span><strong>'+OS.esc(item.item_name)+'</strong><small>'+OS.esc(item.part_number+' · '+title(item.item_type))+'</small></span><b>'+OS.esc(item.hsn_sac)+'</b><span>GST '+Number(item.gst_rate).toFixed(Number(item.gst_rate)%1?2:0)+'%</span></a>').join('');
+}
+document.getElementById('refresh-report').addEventListener('click',loadReport);document.getElementById('report-days').addEventListener('change',loadReport);document.getElementById('report-branch').addEventListener('change',loadReport);
+function value(id){return document.getElementById(id)?.value||''}function title(value){return String(value||'').replace(/_/g,' ').replace(/\b\w/g,letter=>letter.toUpperCase())}
+function periodLabel(days){return days==='all'?'Across all time':'In the last '+days+' days'}function kpi(label,value,note,tone){return '<article class="report-kpi '+tone+'"><span>'+OS.esc(label)+'</span><strong>'+Number(value||0).toLocaleString('en-IN')+'</strong><small>'+OS.esc(note)+'</small></article>'}function emptyState(titleText,note){return '<div class="empty-state compact"><strong>'+OS.esc(titleText)+'</strong><p>'+OS.esc(note)+'</p></div>'}
+</script>
+</body>
+</html>

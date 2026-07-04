@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>Cash Desk</title>
+<style>
+  body { font-family:-apple-system,sans-serif; background:#f0ede8; padding:16px; margin:0; }
+  .card { background:#fff; padding:16px; border-radius:12px; margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.04); }
+  .btn { width:100%; padding:13px; background:#166534; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>Checkout & Settlement Counter</h2>
+  <div id="bill-pane" style="font-size:14px; margin-bottom:12px; line-height:1.5;">Reconstructing ledger records...</div>
+  <button class="btn" id="btn-pay" onclick="pay()">Process Cash Settlement (₹2450.00)</button>
+</div>
+<button class="btn" style="background:#6b7280;" onclick="parent.AppLauncher.open('launcher')">← Back to Dashboard</button>
+<script>
+  let id = new URLSearchParams(window.location.search).get('jobId');
+  window.addEventListener('DOMContentLoaded', load);
+  function load() {
+    const j = parent.Jobs.find(id); if(!j) return;
+    const inv = parent.TAGRO_CORE.TimelineQuery.getAuthoritativeBillingInvoice(j);
+    const pane = document.getElementById('bill-pane');
+    if(!inv) { pane.innerHTML='<i>No active authorization values verified. Create quote base first.</i>'; document.getElementById('btn-pay').style.display='none'; return; }
+    if(inv.isSettled) { pane.innerHTML='<b style="color:#166534;">✓ Invoice fully settled. Account Balance: ₹0.00</b><br>Receipt Reference: ' + inv.settlementDetails.receiptNo; document.getElementById('btn-pay').style.display='none'; }
+    else { pane.innerHTML='Outstanding Total Liability Fee: <b>₹' + inv.totalsMatrix.grandTotal.toFixed(2) + '</b>'; }
+  }
+  async function pay() {
+    const j = parent.Jobs.find(id); const est = parent.TAGRO_CORE.TimelineQuery.getActiveEstimate(j);
+    const p = parent.TAGRO_CORE.EventFactory.build(j, 'payment_received', { estimateId: est?.estimateId, grandTotalCollected: 2450.00, method: 'CASH' }, parent.Session.get());
+    try { await parent.TAGRO_CORE.persist(id, p, parent.Session.get(), 'app-billing'); load(); parent.Toast.show("Payment verified successfully."); } catch(e){ parent.Toast.show(e.message); }
+  }
+  function onJobsSynchronized() { load(); }
+</script>
+</body>
+</html>

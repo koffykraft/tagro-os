@@ -1,0 +1,173 @@
+const ServiceUI={
+  esc(value){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]))},
+  date(value){if(!value)return'';return new Date(value).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'})},
+  shortDate(value){if(!value)return'';return new Date(value).toLocaleDateString('en-IN',{day:'numeric',month:'short'})},
+  money(value){return value===null||value===undefined||value===''?'':Number(value).toLocaleString('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2})},
+  machine(order){return order.machineDescription||[order.makeName,order.modelName].filter(Boolean).join(' ')||'Machine details pending'},
+  customer(order){return order.customerName||order.customerPhone||'Customer details pending'},
+  async session(){
+    const current=await Session.restore();
+    if(!current){location.replace('login.html');return null}
+    return current;
+  },
+  header(session){
+    const initials=(session.name||'Staff').split(/\s+/).map(word=>word[0]).join('').slice(0,2).toUpperCase();
+    const header=document.querySelector('.service-header');
+    if(!header)return;
+    header.innerHTML='<a href="index.html"><img class="service-logo" src="tagro-logo.png" alt="TAGRO"></a><span class="header-space"></span><span class="branch-chip">'+this.esc(session.branch||'')+'</span><button class="user-chip" id="user-menu" type="button" title="Account">'+this.esc(initials)+'</button>';
+    document.getElementById('user-menu').addEventListener('click',async()=>{
+      if(String(session.role).toLowerCase()==='owner'||String(session.role).toLowerCase()==='manager'){
+        location.href='manage.html';
+      }else if(confirm('Sign out of TAGRO Service?')){
+        await Api.request('/auth/logout',{method:'POST'}).catch(()=>{});
+        Session.clear();location.replace('login.html');
+      }
+    });
+  },
+  jobCard(order){
+    return '<a class="job-card" href="work.html?id='+encodeURIComponent(order.id)+'"><div class="job-main"><div class="job-title">'+this.esc(this.machine(order))+' · '+this.esc(this.customer(order))+'</div><div class="job-meta">'+this.esc(order.complaint||'Complaint can be added later')+'</div></div><div class="job-side"><div class="job-number">'+this.esc(order.workOrder)+'</div><span class="status">'+this.esc(order.statusLabel)+'</span></div></a>';
+  },
+  debounce(fn,delay=500){let timer;return(...args)=>{clearTimeout(timer);timer=setTimeout(()=>fn(...args),delay)}}
+};
+
+const WorkOrderForm={
+  mode:'edit',id:null,order:null,customerId:null,parts:[],saving:false,queued:false,session:null,
+  async mount(options){
+    this.mode=options.mode||'edit';this.id=options.id||null;this.session=options.session;
+    this.bind();
+    if(this.mode==='edit'){
+      const data=await Api.request('/work-orders/'+encodeURIComponent(this.id));
+      this.order=data.workOrder;this.populate(data.workOrder);
+    }else{
+      this.parts=[];this.renderParts();this.setState('Accept first. Inspection, parts and billing come later.','');
+    }
+  },
+  bind(){
+    document.getElementById('add-part').addEventListener('click',()=>{this.parts.push({quantity:1});this.renderParts();this.changed()});
+    document.getElementById('customer-search').addEventListener('input',ServiceUI.debounce(()=>this.searchCustomers(),300));
+    document.getElementById('customer-search').addEventListener('keydown',event=>{if(event.key==='Escape')this.hideSearch()});
+    document.querySelectorAll('[data-accessory]').forEach(button=>button.addEventListener('click',()=>{
+      button.classList.toggle('selected');this.changed();
+    }));
+    document.querySelectorAll('[data-complaint]').forEach(button=>button.addEventListener('click',()=>{
+      const complaint=document.getElementById('complaint'),value=button.dataset.complaint;
+      document.querySelectorAll('[data-complaint]').forEach(choice=>{choice.classList.remove('selected');choice.setAttribute('aria-pressed','false')});
+      button.classList.add('selected');button.setAttribute('aria-pressed','true');
+      if(value==='Other'){complaint.value='';complaint.focus()}
+      else complaint.value=value;
+      this.changed();
+    }));
+    document.querySelectorAll('#work-order-form input,#work-order-form textarea,#work-order-form select').forEach(control=>{
+      if(control.id!=='customer-search')control.addEventListener('input',()=>this.changed());
+    });
+    document.getElementById('work-order-form').addEventListener('submit',event=>{event.preventDefault();this.mode==='new'?this.create():this.save(true)});
+  },
+  populate(order){
+    this.customerId=order.customerId;
+    const fields={
+      'customer-name':order.customerName,'customer-phone':order.customerPhone,'customer-place':order.customerPlace,
+      'machine-description':order.machineDescription,'machine-serial':order.serialNumber,
+      'complaint':order.complaint,'observation':order.observation,'work-done':order.workDone,
+      'billing-subtotal':order.billingSubtotal,'billing-tax':order.billingTax,
+      'billing-total':order.billingTotal,'billing-note':order.billingNote
+    };
+    Object.entries(fields).forEach(([id,value])=>{document.getElementById(id).value=value??''});
+    document.querySelectorAll('[data-complaint]').forEach(button=>{
+      const selected=button.dataset.complaint===order.complaint;
+      button.classList.toggle('selected',selected);button.setAttribute('aria-pressed',selected?'true':'false');
+    });
+    document.querySelectorAll('[data-accessory]').forEach(button=>button.classList.toggle('selected',(order.accessories||[]).includes(button.dataset.accessory)));
+    this.parts=(order.parts||[]).map(part=>({
+      partNumber:part.part_number||'',itemName:part.item_name||'',quantity:part.quantity??1,
+      unitPrice:part.unit_price??'',hsnSac:part.hsn_sac||'',gstRate:part.gst_rate??'',notes:part.notes||''
+    }));
+    this.renderParts();
+    document.getElementById('screen-title').textContent=order.workOrder;
+    document.getElementById('screen-subtitle').textContent=ServiceUI.date(order.openedAt)+' · accepted by '+(order.openedByName||'staff');
+    this.setState('All changes are saved automatically.','good');
+  },
+  value(id){return document.getElementById(id).value.trim()},
+  payload(){
+    this.readParts();
+    return{
+      customerId:this.customerId,customerName:this.value('customer-name'),customerPhone:this.value('customer-phone'),
+      customerPlace:this.value('customer-place'),machineDescription:this.value('machine-description'),
+      serialNumber:this.value('machine-serial'),
+      accessories:[...document.querySelectorAll('[data-accessory].selected')].map(button=>button.dataset.accessory),
+      complaint:this.value('complaint'),observation:this.value('observation'),workDone:this.value('work-done'),
+      parts:this.parts,billingSubtotal:this.value('billing-subtotal'),billingTax:this.value('billing-tax'),
+      billingTotal:this.value('billing-total'),billingNote:this.value('billing-note')
+    };
+  },
+  changed(){
+    if(this.mode!=='edit')return;
+    this.setState('Unsaved changes…','');
+    this.queueSave();
+  },
+  queueSave:ServiceUI.debounce(()=>WorkOrderForm.save(false),700),
+  async create(){
+    const button=document.getElementById('accept-machine');button.disabled=true;button.textContent='Accepting machine…';
+    this.setState('Creating the work order…','');
+    try{
+      const data=await Api.request('/work-orders',{method:'POST',body:JSON.stringify(this.payload())});
+      location.replace('work.html?id='+encodeURIComponent(data.workOrder.id));
+    }catch(error){
+      this.setState(error.message,'bad');button.disabled=false;button.textContent='Accept machine';
+    }
+  },
+  async save(explicit){
+    if(this.saving){this.queued=true;return}
+    this.saving=true;this.setState('Saving…','');
+    try{
+      const data=await Api.request('/work-orders/'+encodeURIComponent(this.id),{method:'PUT',body:JSON.stringify(this.payload())});
+      this.order=data.workOrder;this.customerId=data.workOrder.customerId;this.setState('Saved '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}),'good');
+      if(explicit)Toast.show('Work order saved.');
+    }catch(error){this.setState(error.message,'bad')}
+    finally{this.saving=false;if(this.queued){this.queued=false;this.save(false)}}
+  },
+  setState(message,kind){const node=document.getElementById('save-state');node.textContent=message;node.className='save-state'+(kind?' '+kind:'')},
+  async searchCustomers(){
+    const query=this.value('customer-search'),results=document.getElementById('customer-results');
+    if(query.length<2){this.hideSearch();return}
+    try{
+      const data=await Api.request('/customers?query='+encodeURIComponent(query)+'&limit=8');
+      const customers=data.customers||[];
+      results.innerHTML=customers.length?customers.map(customer=>'<button class="search-result" type="button" data-customer-id="'+ServiceUI.esc(customer.id)+'"><strong>'+ServiceUI.esc(customer.name)+'</strong><small>'+ServiceUI.esc([customer.phone,customer.address].filter(Boolean).join(' · '))+'</small></button>').join(''):'<div class="search-result"><strong>No previous customer</strong><small>Continue typing the new details below.</small></div>';
+      results.classList.remove('hidden');
+      results.querySelectorAll('[data-customer-id]').forEach(button=>button.addEventListener('click',()=>this.chooseCustomer(customers.find(item=>item.id===button.dataset.customerId))));
+    }catch(error){results.innerHTML='<div class="search-result">'+ServiceUI.esc(error.message)+'</div>';results.classList.remove('hidden')}
+  },
+  async chooseCustomer(customer){
+    this.customerId=customer.id;document.getElementById('customer-name').value=customer.name||'';
+    document.getElementById('customer-phone').value=customer.phone||'';document.getElementById('customer-place').value=customer.address||'';
+    document.getElementById('customer-search').value=customer.name||'';this.hideSearch();this.changed();
+    try{
+      const data=await Api.request('/customers/'+encodeURIComponent(customer.id)+'/machines');
+      this.renderMachines(data.machines||[]);
+    }catch(error){}
+  },
+  renderMachines(machines){
+    const wrap=document.getElementById('known-machines');
+    if(!machines.length){wrap.innerHTML='';return}
+    wrap.innerHTML='<div class="quiet" style="margin-bottom:7px">Previous machines</div><div class="chip-row">'+machines.map(machine=>'<button type="button" class="choice-chip" data-machine-id="'+ServiceUI.esc(machine.id)+'">'+ServiceUI.esc(machine.display_name)+'</button>').join('')+'</div>';
+    wrap.querySelectorAll('[data-machine-id]').forEach(button=>button.addEventListener('click',()=>{
+      const machine=machines.find(item=>item.id===button.dataset.machineId);
+      document.getElementById('machine-description').value=machine.display_name||'';
+      document.getElementById('machine-serial').value=machine.serial_number||'';this.changed();
+    }));
+  },
+  hideSearch(){document.getElementById('customer-results').classList.add('hidden')},
+  readParts(){
+    this.parts=[...document.querySelectorAll('.part-row')].map(row=>({
+      partNumber:row.querySelector('[data-part-number]').value.trim(),itemName:row.querySelector('[data-part-name]').value.trim(),
+      quantity:row.querySelector('[data-part-quantity]').value,unitPrice:row.querySelector('[data-part-price]').value,
+      hsnSac:'',gstRate:'',notes:'',source:'manual'
+    }));
+  },
+  renderParts(){
+    const list=document.getElementById('part-list');
+    list.innerHTML=this.parts.map((part,index)=>'<div class="part-row" data-part-index="'+index+'"><input class="control" data-part-number placeholder="Part number" value="'+ServiceUI.esc(part.partNumber||'')+'"><input class="control" data-part-name placeholder="Part name / description" value="'+ServiceUI.esc(part.itemName||'')+'"><input class="control" data-part-quantity type="number" min=".01" step=".01" placeholder="Qty" value="'+ServiceUI.esc(part.quantity??1)+'"><input class="control" data-part-price type="number" min="0" step=".01" placeholder="Price" value="'+ServiceUI.esc(part.unitPrice??'')+'"><button class="remove-part" type="button" aria-label="Remove part">×</button></div>').join('');
+    list.querySelectorAll('input').forEach(input=>input.addEventListener('input',()=>this.changed()));
+    list.querySelectorAll('.remove-part').forEach((button,index)=>button.addEventListener('click',()=>{this.readParts();this.parts.splice(index,1);this.renderParts();this.changed()}));
+  }
+};
