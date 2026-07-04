@@ -46,15 +46,20 @@ Verification passed:
 - retired sample data absent from deployable service files;
 - guarded diagram-reference/current-part mapping.
 
-## Pending gate
+## Phase-one staging result — 2026-07-05
 
-The Codex usage limit blocked the push of commits after `b431f3e`, Wrangler dry runs, and the phase-one staging deployment. Production has not changed.
+- Pushed commits through `f73f447` to private GitHub `main`.
+- Production and staging Wrangler dry runs passed.
+- Deployed commit `f73f447` only to `tagro-os-core-staging`.
+- Active staging version: `335dab11-db96-4ea2-a309-4dfa165061d9`
+- Deployment tag: `phase-1-my-space`
+- Browser checks passed for staging login, live bench/queue empty states, personalization, compact-mode persistence, custom shortcut add/save/delete, job-search query handoff, account drawer and console errors.
+- Test personalization was restored to the default non-compact layout with the six built-in shortcuts.
+- No horizontal overflow was present at the tested 1036 CSS-pixel viewport. The mobile breakpoint remains defined at 760 pixels and requires final physical-phone review before production promotion.
+- Production remains on version `30d30c0c-c54d-4e07-8ae5-ff295b578d92`; no production deployment or database mutation occurred.
 
-When execution is available:
+Next:
 
-1. Push commits `3078c21` and `ac005d8` (plus this status note).
-2. Run production and staging dry runs.
-3. Deploy only to `tagro-os-core-staging`.
-4. Visually test desktop and mobile My Space, personalization, search, resume/park and navigation.
-5. Fix any staging defect and repeat checks.
-6. Request explicit approval before production promotion.
+1. Review My Space on an actual phone using the staging URL.
+2. Resolve any staff/device feedback.
+3. Obtain explicit approval before promoting phase one to production.
