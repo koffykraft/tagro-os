@@ -51,6 +51,7 @@
   (async()=>{
     listSession=await ServiceUI.session();if(!listSession)return;ServiceUI.header(listSession);
     const params=new URLSearchParams(location.search);
+    if(params.get('query'))document.getElementById('job-search').value=params.get('query');
     if(params.get('mine')==='1'){document.getElementById('list-title').textContent='My bench';document.title='My Bench — TAGRO'}
     if(params.get('status'))document.getElementById('status-filter').value=params.get('status');
     document.getElementById('job-search').addEventListener('input',()=>{clearTimeout(loadTimer);loadTimer=setTimeout(loadJobs,350)});

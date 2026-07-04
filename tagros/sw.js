@@ -1,5 +1,5 @@
-const CACHE='tagro-white-v17';
-const SHELL=['/index.html','/login.html','/app-customers.html','/app-branches.html','/app-machines.html','/app-catalog.html','/app-purchase-orders.html','/app-services.html','/app-jobs.html','/app-staff.html','/app-reports.html','/robots.txt','/os-shell.css','/os-core.js','/os-manifest.js','/os-icons.js','/tagro-logo.png'];
+const CACHE='tagro-white-v18';
+const SHELL=['/index.html','/login.html','/app-customers.html','/app-branches.html','/app-machines.html','/app-catalog.html','/app-purchase-orders.html','/app-services.html','/app-jobs.html','/app-staff.html','/app-reports.html','/robots.txt','/os-shell.css','/service.css','/my-space.css','/os-core.js','/service-core.js','/my-space.js','/os-manifest.js','/os-icons.js','/tagro-logo.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));self.skipWaiting();});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))));self.clients.claim();});
 self.addEventListener('fetch',event=>{if(event.request.method!=='GET'||new URL(event.request.url).pathname.startsWith('/api/'))return;event.respondWith(fetch(event.request).then(response=>{const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return response;}).catch(()=>caches.match(event.request)));});

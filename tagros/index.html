@@ -4,77 +4,192 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#ffffff">
-  <title>TAGRO Service</title>
+  <title>My Space — TAGRO</title>
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="os-shell.css">
   <link rel="stylesheet" href="service.css">
+  <link rel="stylesheet" href="my-space.css">
 </head>
-<body>
-  <header class="service-header"></header>
-  <main class="service-main">
-    <div class="home-head">
-      <div>
-        <p class="eyebrow">Workshop</p>
-        <h1 id="greeting">Good work starts here.</h1>
-        <p class="lead" id="branch-line">Loading today’s workshop…</p>
+<body class="my-space-page">
+  <div class="space-shell">
+    <aside class="space-sidebar" aria-label="Main navigation">
+      <a class="space-brand" href="index.html" aria-label="TAGRO My Space">
+        <img src="tagro-logo.png" alt="TAGRO">
+        <span>OS</span>
+      </a>
+      <nav class="space-nav">
+        <a class="active" href="index.html" aria-current="page"><span class="nav-icon">⌂</span>My Space</a>
+        <a href="bench.html"><span class="nav-icon">⌑</span>My Bench</a>
+        <a href="app-jobs.html"><span class="nav-icon">☷</span>Jobs</a>
+        <a href="receive.html"><span class="nav-icon">＋</span>Receive</a>
+        <a href="app-catalog.html"><span class="nav-icon">◇</span>Parts</a>
+        <a href="app-catalog.html"><span class="nav-icon">?</span>Assist</a>
+      </nav>
+    </aside>
+
+    <div class="space-workspace">
+      <header class="space-topbar">
+        <button class="mobile-menu-button" id="mobile-menu" type="button" aria-label="Open navigation">☰</button>
+        <button class="branch-selector" id="branch-label" type="button" disabled>Branch</button>
+        <div class="topbar-greeting">
+          <span class="sun-mark" aria-hidden="true">☀</span>
+          <span id="compact-greeting">Good morning</span>,
+          <strong id="staff-name">Staff</strong>
+          <span class="role-label" id="role-label">Staff</span>
+        </div>
+        <form class="global-search" action="app-jobs.html" method="get" role="search">
+          <label class="sr-only" for="global-query">Search jobs</label>
+          <span aria-hidden="true">⌕</span>
+          <input id="global-query" name="query" type="search" autocomplete="off" placeholder="Search jobs, machines, work orders">
+          <kbd>Ctrl K</kbd>
+        </form>
+        <button class="profile-button" id="profile-button" type="button" aria-label="Account menu">ST</button>
+      </header>
+
+      <main class="space-main">
+        <div class="space-heading">
+          <div>
+            <h1>My Space</h1>
+            <p>Your work, tools and shortcuts</p>
+          </div>
+          <button class="outline-button" id="personalize-button" type="button"><span>☷</span> Personalize</button>
+        </div>
+
+        <div class="space-grid">
+          <section class="summary-card" aria-labelledby="bench-title">
+            <div class="card-heading">
+              <h2 id="bench-title"><span aria-hidden="true">⌑</span> My Bench</h2>
+            </div>
+            <div class="metric-box bench-metric">
+              <span class="metric-icon" aria-hidden="true">⌑</span>
+              <span><strong id="bench-count">—</strong><small>assigned</small></span>
+            </div>
+            <a class="card-link" href="bench.html">View Bench <span aria-hidden="true">→</span></a>
+          </section>
+
+          <section class="summary-card" aria-labelledby="queue-title">
+            <div class="card-heading">
+              <h2 id="queue-title"><span aria-hidden="true">☷</span> <span id="queue-name">Branch Queue</span></h2>
+              <span class="live-label"><i></i>Live</span>
+            </div>
+            <div class="metric-box queue-metric">
+              <span class="metric-icon" aria-hidden="true">▱</span>
+              <span><strong id="queue-count">—</strong><small>active machines</small></span>
+            </div>
+            <a class="card-link" href="app-jobs.html">View Queue <span aria-hidden="true">→</span></a>
+          </section>
+
+          <section class="resume-card" aria-labelledby="resume-title">
+            <div class="card-heading">
+              <h2 id="resume-title"><span aria-hidden="true">↻</span> Resume work</h2>
+            </div>
+            <div id="resume-work" class="resume-work">
+              <div class="space-empty compact">Looking for your most recent job…</div>
+            </div>
+          </section>
+
+          <section class="parked-card" aria-labelledby="parked-title">
+            <div class="card-heading">
+              <h2 id="parked-title"><span aria-hidden="true">⌖</span> Parked</h2>
+              <button class="text-button" id="clear-parked" type="button">Clear</button>
+            </div>
+            <div class="parked-list" id="parked-list"></div>
+          </section>
+
+          <section class="communication-card" aria-labelledby="communication-title">
+            <div class="card-heading">
+              <h2 id="communication-title"><span aria-hidden="true">▢</span> Communication</h2>
+            </div>
+            <div class="communication-state">
+              <span class="communication-icon" aria-hidden="true">✓</span>
+              <div>
+                <strong>Communication hub is not enabled yet</strong>
+                <small>Customer, branch and manager messages will appear here only after the secure hub is connected.</small>
+              </div>
+            </div>
+          </section>
+
+          <section class="shortcuts-card" aria-labelledby="shortcuts-title">
+            <div class="card-heading">
+              <h2 id="shortcuts-title"><span aria-hidden="true">⠿</span> My Shortcuts</h2>
+              <button class="text-button customize-shortcuts" type="button">Customize</button>
+            </div>
+            <div class="shortcut-list" id="shortcut-list"></div>
+          </section>
+
+          <section class="frequent-card" aria-labelledby="frequent-title">
+            <div class="card-heading"><h2 id="frequent-title">Frequently used</h2></div>
+            <div class="frequent-list">
+              <a href="app-catalog.html"><span class="frequent-icon orange">◇</span><small>Parts Picker</small></a>
+              <a href="app-catalog.html"><span class="frequent-icon blue">▣</span><small>Repair Manual</small></a>
+              <a href="app-jobs.html"><span class="frequent-icon purple">▤</span><small>Estimates</small></a>
+              <a href="app-purchase-orders.html"><span class="frequent-icon green">▥</span><small>My Pick List</small></a>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <nav class="mobile-bottom-nav" aria-label="Mobile navigation">
+    <a class="active" href="index.html" aria-current="page"><span>⌂</span>Home</a>
+    <a href="bench.html"><span>⌑</span>Bench</a>
+    <a href="app-jobs.html"><span>☷</span>Jobs</a>
+    <a href="app-catalog.html"><span>◇</span>Parts</a>
+    <button id="mobile-more" type="button"><span>•••</span>More</button>
+  </nav>
+
+  <dialog class="personalize-dialog" id="personalize-dialog">
+    <form method="dialog" class="dialog-card">
+      <div class="dialog-heading">
+        <div>
+          <h2>Personalize My Space</h2>
+          <p>These settings stay with this staff account on this device.</p>
+        </div>
+        <button class="close-button" value="cancel" aria-label="Close">×</button>
       </div>
-      <a class="link-button" href="app-jobs.html">Search all jobs</a>
-    </div>
+      <label class="setting-row">
+        <span><strong>Compact mode</strong><small>Show more information in less space.</small></span>
+        <input id="compact-mode" type="checkbox" role="switch">
+      </label>
+      <fieldset class="shortcut-settings">
+        <legend>Visible shortcuts</legend>
+        <div id="shortcut-settings"></div>
+      </fieldset>
+      <fieldset class="custom-shortcut-form">
+        <legend>Add a shortcut</legend>
+        <div class="custom-shortcut-grid">
+          <label>Name<input id="custom-name" type="text" maxlength="24" placeholder="Example: Parts supplier"></label>
+          <label>Link<input id="custom-url" type="text" inputmode="url" placeholder="https://, tel:, mailto:"></label>
+          <button class="outline-button" id="add-shortcut" type="button">Add</button>
+        </div>
+        <p class="field-message" id="shortcut-message" role="status"></p>
+      </fieldset>
+      <div class="dialog-actions">
+        <button class="outline-button" value="cancel">Cancel</button>
+        <button class="save-personalization" id="save-personalization" value="default">Save changes</button>
+      </div>
+    </form>
+  </dialog>
 
-    <section class="primary-actions" aria-label="Workshop actions">
-      <a class="action-card primary" href="receive.html">
-        <span class="action-icon">＋</span>
-        <span><span class="action-title">Receive machine</span><span class="action-sub">Open one simple work order. Complete details whenever they become known.</span></span>
-      </a>
-      <a class="action-card" href="bench.html">
-        <span class="count-badge" id="bench-count">0</span>
-        <span class="action-icon">🔧</span>
-        <span><span class="action-title">My bench</span><span class="action-sub">Machines currently assigned to me.</span></span>
-      </a>
-      <a class="action-card" href="app-jobs.html">
-        <span class="count-badge" id="open-count">0</span>
-        <span class="action-icon">☰</span>
-        <span><span class="action-title">All jobs</span><span class="action-sub">Find any customer, machine or work order.</span></span>
-      </a>
-    </section>
-
-    <div class="section-head">
-      <h2>Continue work</h2>
-      <span class="quiet">Most recently changed</span>
+  <div class="mobile-drawer" id="mobile-drawer" hidden>
+    <button class="drawer-backdrop" type="button" aria-label="Close navigation"></button>
+    <div class="drawer-panel">
+      <div class="drawer-heading">
+        <img src="tagro-logo.png" alt="TAGRO">
+        <button type="button" aria-label="Close navigation">×</button>
+      </div>
+      <a href="receive.html">Receive machine</a>
+      <a href="app-purchase-orders.html">Purchase orders</a>
+      <a href="manage.html" id="manage-link">Manage</a>
+      <button id="sign-out" type="button">Sign out</button>
     </div>
-    <div class="job-list" id="continue-list">
-      <div class="empty">Loading work orders…</div>
-    </div>
+  </div>
 
-    <div class="section-head"><h2>Workshop tools</h2></div>
-    <section class="role-tools">
-      <a class="tool-card" href="app-jobs.html?status=waiting_parts">📦 Parts needed</a>
-      <a class="tool-card" href="app-reports.html">📊 Reports</a>
-      <a class="tool-card" href="app-catalog.html">🔩 Parts master</a>
-      <a class="tool-card" href="app-purchase-orders.html">Purchase orders</a>
-    </section>
-  </main>
+  <div id="space-toast" class="space-toast" role="status" aria-live="polite"></div>
   <script src="os-manifest.js"></script>
   <script src="os-core.js"></script>
   <script src="service-core.js"></script>
-  <script>
-  (async()=>{
-    const session=await ServiceUI.session();if(!session)return;ServiceUI.header(session);
-    const hour=new Date().getHours(),word=hour<12?'Good morning':hour<17?'Good afternoon':'Good evening';
-    document.getElementById('greeting').textContent=word+', '+String(session.name||'').split(' ')[0]+'.';
-    document.getElementById('branch-line').textContent=(session.branchName||session.branch)+' · See what needs attention without hunting through menus.';
-    try{
-      const [allData,mineData]=await Promise.all([
-        Api.request('/work-orders?limit=160'),
-        Api.request('/work-orders?mine=1&limit=160')
-      ]);
-      const orders=allData.workOrders||[],mine=mineData.workOrders||[];
-      document.getElementById('open-count').textContent=orders.filter(order=>!['delivered','cancelled'].includes(order.status)).length;
-      document.getElementById('bench-count').textContent=mine.filter(order=>!['delivered','cancelled'].includes(order.status)).length;
-      const recent=orders.filter(order=>!['delivered','cancelled'].includes(order.status)).slice(0,6);
-      document.getElementById('continue-list').innerHTML=recent.length?recent.map(order=>ServiceUI.jobCard(order)).join(''):'<div class="empty">No active jobs. Receive a machine when the next one arrives.</div>';
-    }catch(error){document.getElementById('continue-list').innerHTML='<div class="empty">'+ServiceUI.esc(error.message)+'</div>'}
-  })();
-  </script>
+  <script src="my-space.js"></script>
 </body>
 </html>
