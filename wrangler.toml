@@ -44,3 +44,41 @@ head_sampling_rate = 1
 [observability.traces]
 enabled = true
 head_sampling_rate = 0.01
+
+[env.staging]
+name = "tagro-os-core-staging"
+workers_dev = true
+preview_urls = true
+routes = []
+
+  [env.staging.vars]
+  ENVIRONMENT = "staging"
+
+  [[env.staging.d1_databases]]
+  binding = "DB"
+  database_name = "tagro-os-staging"
+  database_id = "ac5807d2-3e6a-4e10-b77e-68692e21f06a"
+  migrations_dir = "migrations"
+
+  [[env.staging.kv_namespaces]]
+  binding = "CATALOG_KV"
+  id = "cd758d9505544f84a9158b3fcc722328"
+
+  [[env.staging.r2_buckets]]
+  binding = "MANUALS"
+  bucket_name = "tagro-manuals-staging"
+
+  [[env.staging.r2_buckets]]
+  binding = "DOCS"
+  bucket_name = "tagro-docs-staging"
+
+  [env.staging.observability]
+  enabled = true
+
+    [env.staging.observability.logs]
+    enabled = true
+    head_sampling_rate = 1
+
+    [env.staging.observability.traces]
+    enabled = true
+    head_sampling_rate = 0.01

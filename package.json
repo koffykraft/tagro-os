@@ -4,9 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "dev:staging": "wrangler dev --env staging",
+    "deploy": "wrangler deploy --env=\"\" --strict",
+    "deploy:staging": "wrangler deploy --env staging --strict",
+    "deploy:dry-run": "wrangler deploy --env=\"\" --dry-run --strict",
+    "deploy:staging:dry-run": "wrangler deploy --env staging --dry-run --strict",
     "db:migrate:local": "wrangler d1 migrations apply tagro-os --local",
-    "db:migrate:remote": "wrangler d1 migrations apply tagro-os --remote"
+    "db:migrate:production": "wrangler d1 migrations apply tagro-os --env=\"\" --remote",
+    "db:migrate:staging": "wrangler d1 migrations apply tagro-os-staging --env staging --remote"
   },
   "devDependencies": {
     "wrangler": "^4.24.3"
