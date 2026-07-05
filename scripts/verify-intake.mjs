@@ -43,7 +43,7 @@ assert(intake.includes("input[name=\"contact-verification\"]:checked") &&
 assert(worker.includes("intakeDraft ? 'job_received' : 'machine_received'"), 'Completed intake does not record job_received');
 assert(worker.includes("'Machine received through intake'") &&
   worker.includes('customerMachineId'), 'Completed intake does not create or link the physical machine');
-assert(sw.includes("'tagro-white-v23'"), 'Service worker cache was not advanced');
+assert(sw.includes("'tagro-white-v24'"), 'Service worker cache was not advanced');
 
 for (const retired of ['Rubber Biju', 'Jose Sawmill', 'Thomas Thumpassery', '9447000001', '9447000002', '9656361846']) {
   assert(!receive.includes(retired) && !intake.includes(retired), `Retired sample data found: ${retired}`);

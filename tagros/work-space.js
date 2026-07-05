@@ -362,11 +362,25 @@ const JobWorkspace = {
 
   renderEstimateState() {
     const state = document.getElementById('estimate-state');
+    const share = document.getElementById('estimate-share-actions');
     if (!this.estimate) {
       state.textContent = 'No estimate saved yet.';
+      share.hidden = true;
       return;
     }
     state.textContent = `${this.estimate.estimate_number || 'Estimate'} · ${this.title(this.estimate.status || 'draft')} · ${this.money(this.estimate.grand_total)}`;
+    const digits = String(this.order.customerPhone || '').replace(/\D/g, '');
+    const phone = digits.length === 10 ? `91${digits}` : digits;
+    const message = `TAGRO estimate ${this.estimate.estimate_number} for ${ServiceUI.machine(this.order)}: ${this.money(this.estimate.grand_total)}. Please confirm before work proceeds.`;
+    const whatsapp = document.getElementById('share-estimate-whatsapp');
+    const sms = document.getElementById('share-estimate-sms');
+    if (phone.length >= 10) {
+      whatsapp.href = `https://wa.me/${encodeURIComponent(phone)}?text=${encodeURIComponent(message)}`;
+      sms.href = `sms:${encodeURIComponent(this.order.customerPhone)}?body=${encodeURIComponent(message)}`;
+      share.hidden = false;
+    } else {
+      share.hidden = true;
+    }
   },
 
   renderBasket() {
@@ -385,14 +399,32 @@ const JobWorkspace = {
     WorkOrderForm.readParts();
     const parts = WorkOrderForm.parts.filter(part => !part.draft && part.partNumber && part.itemName);
     const incomplete = parts.filter(part => !part.partNumber || !part.itemName || !part.hsnSac || part.gstRate === '' || part.gstRate == null || part.unitPrice === '' || part.unitPrice == null);
-    if (!parts.length) {
-      this.showToast('Add a catalogue part before creating an estimate.');
+    const labour = {
+      description: document.getElementById('estimate-labour-description').value.trim(),
+      quantity: Number(document.getElementById('estimate-labour-quantity').value),
+      unitPrice: Number(document.getElementById('estimate-labour-rate').value),
+      hsnSac: document.getElementById('estimate-labour-sac').value.trim(),
+      gstRate: Number(document.getElementById('estimate-labour-gst').value)
+    };
+    const labourStarted = labour.description || labour.hsnSac ||
+      document.getElementById('estimate-labour-rate').value ||
+      document.getElementById('estimate-labour-gst').value;
+    if (!parts.length && !labourStarted) {
+      this.showToast('Add a part or labour before creating an estimate.');
       this.openParts();
       return;
     }
     if (incomplete.length) {
       this.showToast('Estimate needs part number, name, HSN, GST and price. Add verified catalogue parts.');
       this.openDialog('job-details-dialog');
+      return;
+    }
+    if (labourStarted && (!labour.description || !labour.hsnSac ||
+        !Number.isFinite(labour.quantity) || labour.quantity <= 0 ||
+        !Number.isFinite(labour.unitPrice) || labour.unitPrice < 0 ||
+        !Number.isFinite(labour.gstRate) || labour.gstRate < 0 || labour.gstRate > 100)) {
+      this.showToast('Complete labour name, SAC, GST, quantity and rate.');
+      document.querySelector('.estimate-labour').open = true;
       return;
     }
     const button = document.getElementById('create-estimate');
@@ -403,16 +435,28 @@ const JobWorkspace = {
         method: 'PUT',
         body: JSON.stringify({
           notes: 'Prepared from Service Workspace',
-          items: parts.map(part => ({
-            itemType: 'part',
-            partNumber: part.partNumber,
-            description: part.itemName,
-            hsnSac: part.hsnSac,
-            gstRate: Number(part.gstRate),
-            quantity: Number(part.quantity) || 1,
-            unitPrice: Number(part.unitPrice) || 0,
-            source: part.source || 'catalog'
-          }))
+          items: [
+            ...parts.map(part => ({
+              itemType: 'part',
+              partNumber: part.partNumber,
+              description: part.itemName,
+              hsnSac: part.hsnSac,
+              gstRate: Number(part.gstRate),
+              quantity: Number(part.quantity) || 1,
+              unitPrice: Number(part.unitPrice) || 0,
+              source: part.source || 'catalog'
+            })),
+            ...(labourStarted ? [{
+              itemType: 'service',
+              partNumber: null,
+              description: labour.description,
+              hsnSac: labour.hsnSac,
+              gstRate: labour.gstRate,
+              quantity: labour.quantity,
+              unitPrice: labour.unitPrice,
+              source: 'workbench_labour'
+            }] : [])
+          ]
         })
       });
       this.estimate = data.estimate;

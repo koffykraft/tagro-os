@@ -30,7 +30,7 @@ const workspaceIds = [...referencedIds].filter(id => (
 
 check(workspaceIds.every(id => htmlIds.has(id)), `workspace DOM contract (${workspaceIds.length} IDs)`);
 check(html.includes('work-space.css') && html.includes('work-space.js'), 'workspace assets linked');
-check(sw.includes("'/work-space.css'") && sw.includes("'/work-space.js'") && sw.includes('tagro-white-v23'), 'offline shell versioned');
+check(sw.includes("'/work-space.css'") && sw.includes("'/work-space.js'") && sw.includes('tagro-white-v24'), 'offline shell versioned');
 check(js.includes("Api.request('/work-orders?limit=160')") && js.includes("Api.request('/work-orders?mine=1&limit=160')"), 'live queue data used');
 check(js.includes('/knowledge/parts?query=') && js.includes('addCatalogPart'), 'parts:master-to-job path');
 check(js.includes('/estimate') && js.includes('Create estimate'), 'estimate conversion path');

@@ -3149,12 +3149,18 @@ async function getWorkOrder(env, session, id, successStatus = 200) {
 async function updateWorkOrder(request, env, session, id) {
   const jobId = cleanText(id, 80);
   const current = await env.DB.prepare(
-    `SELECT j.id, j.branch_id, j.customer_id, c.record_kind
+    `SELECT j.id, j.branch_id, j.customer_id, c.record_kind,
+      (SELECT e.event_type FROM job_events e
+       WHERE e.job_id = j.id AND e.event_type <> 'note_added'
+       ORDER BY e.created_at DESC, e.id DESC LIMIT 1) AS latest_event_type
      FROM repair_jobs j JOIN customers c ON c.id = j.customer_id WHERE j.id = ?`
   ).bind(jobId).first();
   if (!current) return json({ ok: false, error: 'Work order not found.' }, 404);
   if (!hasRole(session, 'owner') && current.branch_id !== session.branch_id) {
     return json({ ok: false, error: 'This work order belongs to another branch.' }, 403);
+  }
+  if (['returned', 'cancelled'].includes(jobStatus(current.latest_event_type))) {
+    return json({ ok: false, error: 'This work order is closed and cannot be changed.' }, 409);
   }
   const input = workOrderInput(await readJson(request));
   const validation = validateWorkOrderInput(input);
@@ -3634,7 +3640,10 @@ async function addRepairJobEvent(request, env, session, id) {
 async function getJobEstimate(env, session, id) {
   const jobId = cleanText(id, 80);
   const job = await env.DB.prepare(
-    `SELECT j.id, j.branch_id, j.work_order, b.code AS branch_code
+    `SELECT j.id, j.branch_id, j.work_order, b.code AS branch_code,
+      (SELECT e.event_type FROM job_events e
+       WHERE e.job_id = j.id AND e.event_type <> 'note_added'
+       ORDER BY e.created_at DESC, e.id DESC LIMIT 1) AS latest_event_type
      FROM repair_jobs j JOIN branches b ON b.id = j.branch_id WHERE j.id = ?`
   ).bind(jobId).first();
   if (!job) return json({ ok: false, error: 'Repair job not found.' }, 404);
@@ -3662,12 +3671,18 @@ async function getJobEstimate(env, session, id) {
 async function saveJobEstimate(request, env, session, id) {
   const jobId = cleanText(id, 80);
   const job = await env.DB.prepare(
-    `SELECT j.id, j.branch_id, j.work_order, b.code AS branch_code
+    `SELECT j.id, j.branch_id, j.work_order, b.code AS branch_code,
+      (SELECT e.event_type FROM job_events e
+       WHERE e.job_id = j.id AND e.event_type <> 'note_added'
+       ORDER BY e.created_at DESC, e.id DESC LIMIT 1) AS latest_event_type
      FROM repair_jobs j JOIN branches b ON b.id = j.branch_id WHERE j.id = ?`
   ).bind(jobId).first();
   if (!job) return json({ ok: false, error: 'Repair job not found.' }, 404);
   if (!hasRole(session, 'owner') && job.branch_id !== session.branch_id) {
     return json({ ok: false, error: 'This repair job belongs to another branch.' }, 403);
+  }
+  if (['returned', 'cancelled'].includes(jobStatus(job.latest_event_type))) {
+    return json({ ok: false, error: 'This repair job is closed and its estimate cannot be changed.' }, 409);
   }
 
   const body = await readJson(request);

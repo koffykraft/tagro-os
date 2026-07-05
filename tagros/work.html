@@ -157,7 +157,21 @@
               <b id="basket-total">₹0</b>
             </div>
             <div class="basket-preview" id="basket-preview"></div>
+            <details class="estimate-labour">
+              <summary>Add labour</summary>
+              <div class="estimate-labour-grid">
+                <label class="wide">Work<input id="estimate-labour-description" placeholder="Labour / service"></label>
+                <label>Qty<input id="estimate-labour-quantity" type="number" min="0.1" step="0.1" value="1"></label>
+                <label>Rate<input id="estimate-labour-rate" type="number" min="0" step="0.01" inputmode="decimal"></label>
+                <label>SAC<input id="estimate-labour-sac" inputmode="numeric" placeholder="SAC"></label>
+                <label>GST %<input id="estimate-labour-gst" type="number" min="0" max="100" step="0.01" inputmode="decimal"></label>
+              </div>
+            </details>
             <button class="workspace-primary" id="create-estimate" type="button">Create estimate</button>
+            <div class="estimate-share-actions" id="estimate-share-actions" hidden>
+              <a class="outline-button" id="share-estimate-whatsapp" href="#" target="_blank" rel="noopener">Share on WhatsApp</a>
+              <a class="outline-button" id="share-estimate-sms" href="#">Share by SMS</a>
+            </div>
             <a class="outline-button full-button order-parts-link" id="order-parts-link" href="app-purchase-orders.html">Order / hold these parts</a>
             <button class="outline-button full-button" id="add-manual-part" type="button">＋ Add manual part</button>
             <p class="integration-note" id="estimate-state">No estimate loaded.</p>

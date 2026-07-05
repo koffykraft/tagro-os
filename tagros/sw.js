@@ -1,4 +1,4 @@
-const CACHE='tagro-white-v23';
+const CACHE='tagro-white-v24';
 importScripts('/os-manifest.js');
 const APP_FILES=TAGRO_MANIFEST.apps.filter(app=>app.enabled&&app.file).map(app=>'/'+app.file);
 const SHELL=[...new Set(['/login.html','/work.html','/manage.html','/robots.txt','/os-shell.css','/service.css','/my-space.css','/intake.css','/work-space.css','/os-core.js','/app-shell.js','/service-ui.js','/work-order-form.js','/my-space.js','/intake.js','/work-space.js','/os-manifest.js','/os-icons.js','/tagro-logo.png',...APP_FILES])];
