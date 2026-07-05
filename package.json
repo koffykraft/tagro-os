@@ -7,6 +7,7 @@
     "dev:staging": "wrangler dev --env staging",
     "preview:my-space": "node scripts/preview-my-space.mjs",
     "verify:intake": "node scripts/verify-intake.mjs",
+    "verify:workspace": "node scripts/verify-workspace.mjs",
     "deploy": "wrangler deploy --env=\"\" --strict",
     "deploy:staging": "wrangler deploy --env staging --strict",
     "deploy:dry-run": "wrangler deploy --env=\"\" --dry-run --strict",

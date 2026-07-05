@@ -4,107 +4,314 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#ffffff">
-  <title>Work Order — TAGRO</title>
+  <title>Service Workspace — TAGRO</title>
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="os-shell.css">
   <link rel="stylesheet" href="service.css">
+  <link rel="stylesheet" href="my-space.css">
+  <link rel="stylesheet" href="work-space.css">
 </head>
-<body>
-  <header class="service-header"></header>
-  <main class="service-main">
-    <div class="screen-bar">
-      <a class="back-link" href="app-jobs.html" aria-label="Back">←</a>
-      <div class="screen-bar-main">
-        <div class="screen-title" id="screen-title">Work order</div>
-        <div class="save-state" id="screen-subtitle">Loading work order…</div>
-      </div>
+<body class="my-space-page job-workspace-page">
+  <div class="space-shell">
+    <aside class="space-sidebar" aria-label="Main navigation">
+      <a class="space-brand" href="index.html" aria-label="TAGRO My Space">
+        <img src="tagro-logo.png" alt="TAGRO"><span>OS</span>
+      </a>
+      <nav class="space-nav">
+        <a href="index.html"><span class="nav-icon">⌂</span>My Space</a>
+        <a class="active" href="bench.html" aria-current="page"><span class="nav-icon">⌑</span>My Bench</a>
+        <a href="app-jobs.html"><span class="nav-icon">☷</span>Jobs</a>
+        <a href="receive.html"><span class="nav-icon">＋</span>Receive</a>
+        <a href="app-catalog.html"><span class="nav-icon">◇</span>Parts</a>
+        <a href="app-catalog.html"><span class="nav-icon">?</span>Assist</a>
+      </nav>
+    </aside>
+
+    <div class="space-workspace">
+      <header class="space-topbar workspace-topbar">
+        <button class="mobile-menu-button" id="mobile-menu" type="button" aria-label="Open navigation">☰</button>
+        <a class="job-back" href="app-jobs.html" aria-label="Back to jobs">‹</a>
+        <div class="topbar-job">
+          <strong id="top-work-order">Work order</strong>
+          <span id="top-machine">Loading machine…</span>
+        </div>
+        <form class="global-search" action="app-jobs.html" method="get" role="search">
+          <label class="sr-only" for="global-query">Search jobs</label>
+          <span aria-hidden="true">⌕</span>
+          <input id="global-query" name="query" type="search" autocomplete="off" placeholder="Search jobs or machines">
+          <kbd>Ctrl K</kbd>
+        </form>
+        <span class="workspace-save" id="save-state">Loading…</span>
+        <button class="profile-button" id="profile-button" type="button" aria-label="Account menu">ST</button>
+      </header>
+
+      <main class="workspace-main">
+        <section class="job-context" aria-labelledby="screen-title">
+          <div class="job-context-main">
+            <p class="job-kicker"><span id="screen-title">Work order</span><span id="job-age"></span></p>
+            <h1 id="job-machine">Machine</h1>
+            <p id="job-complaint">Loading complaint…</p>
+          </div>
+          <div class="job-context-state">
+            <span class="workspace-status" id="job-status">Loading</span>
+            <span id="job-assignee">Unassigned</span>
+          </div>
+        </section>
+
+        <div class="job-controls" aria-label="Job controls">
+          <button class="outline-button" id="previous-job" type="button">‹ Previous</button>
+          <button class="outline-button" id="switch-job" type="button">⇄ Switch job</button>
+          <button class="outline-button" id="next-job" type="button">Next ›</button>
+          <button class="outline-button" id="park-job" type="button">▣ Park job</button>
+          <button class="outline-button emphasized" id="edit-details" type="button">Edit details</button>
+        </div>
+
+        <nav class="workspace-tabs" aria-label="Workspace sections">
+          <a class="active" href="#overview">Overview</a>
+          <a href="#parts-reference">Parts</a>
+          <a href="#customer-communication">Customer</a>
+          <a href="#timeline">Timeline</a>
+        </nav>
+
+        <div class="workspace-layout" id="overview">
+          <section class="workspace-card next-action-card">
+            <div class="workspace-card-head">
+              <div><span class="card-mark orange">◎</span><h2>Next action</h2></div>
+              <span id="diagnostic-step">Step 1</span>
+            </div>
+            <div id="next-action-content" class="next-action-content">
+              <div class="workspace-loading">Preparing the next useful action…</div>
+            </div>
+          </section>
+
+          <section class="workspace-card progress-card">
+            <div class="workspace-card-head">
+              <div><span class="card-mark">◌</span><h2>Job progress</h2></div>
+            </div>
+            <div class="progress-track" id="progress-track"></div>
+            <div class="machine-location">
+              <span class="location-icon">⌖</span>
+              <div><strong id="machine-location">Location not recorded</strong><small>Physical-location field is not connected yet.</small></div>
+              <button class="outline-button" type="button" disabled>Locate</button>
+            </div>
+            <div class="technician-row">
+              <div><small>Technician</small><strong id="technician-name">Unassigned</strong></div>
+              <select class="workspace-select" id="assigned-to" aria-label="Assigned technician">
+                <option value="">Unassigned</option>
+              </select>
+            </div>
+          </section>
+
+          <aside class="workspace-card queue-card">
+            <div class="workspace-card-head">
+              <div><span class="card-mark">☷</span><h2>My queue</h2></div>
+              <button class="text-button" id="refresh-queue" type="button">Refresh</button>
+            </div>
+            <div class="workspace-queue" id="workspace-queue">
+              <div class="workspace-loading">Loading queue…</div>
+            </div>
+            <a class="queue-all-link" href="app-jobs.html?mine=1">View all assigned jobs <span>›</span></a>
+          </aside>
+
+          <section class="workspace-card parts-reference-card" id="parts-reference">
+            <div class="workspace-card-head">
+              <div><span class="card-mark orange">◇</span><h2>Parts & reference</h2></div>
+            </div>
+            <button class="workspace-primary" id="open-parts-search" type="button">Open parts picker</button>
+            <div class="reference-actions">
+              <a href="app-catalog.html">TAGRO / STIHL catalogue</a>
+              <a href="app-catalog.html">Manuals & diagrams</a>
+            </div>
+            <p class="integration-note">Search and add parts here without leaving this job. Visual callouts arrive with the Machine Knowledge page.</p>
+          </section>
+
+          <section class="workspace-card frequent-parts-card">
+            <div class="workspace-card-head">
+              <div><span class="card-mark">▦</span><h2>Frequent parts</h2></div>
+              <button class="text-button" id="edit-frequent" type="button">Add from catalogue</button>
+            </div>
+            <div class="frequent-parts" id="frequent-parts"></div>
+          </section>
+
+          <section class="workspace-card basket-card">
+            <div class="workspace-card-head">
+              <div><span class="card-mark">▽</span><h2>Parts / estimate</h2></div>
+            </div>
+            <div class="basket-summary">
+              <span><strong id="basket-count">0</strong><small>parts selected</small></span>
+              <b id="basket-total">₹0</b>
+            </div>
+            <div class="basket-preview" id="basket-preview"></div>
+            <button class="workspace-primary" id="create-estimate" type="button">Create estimate</button>
+            <button class="outline-button full-button" id="add-manual-part" type="button">＋ Add manual part</button>
+            <p class="integration-note" id="estimate-state">No estimate loaded.</p>
+          </section>
+
+          <section class="workspace-card communication-card-work" id="customer-communication">
+            <div class="workspace-card-head">
+              <div><span class="card-mark orange">○</span><h2>Customer communication</h2></div>
+              <span>Customer-controlled handoff</span>
+            </div>
+            <div class="communication-actions">
+              <a class="outline-button" id="message-customer" href="#" target="_blank" rel="noopener">Message customer</a>
+              <a class="outline-button" id="call-customer" href="#">Call</a>
+              <button class="outline-button quick-note" data-template="Inspection started" type="button">Inspection started</button>
+              <button class="outline-button quick-note" data-template="Estimate ready" type="button">Estimate ready</button>
+              <button class="outline-button quick-note" data-template="Waiting for approval" type="button">Waiting for approval</button>
+              <button class="outline-button quick-note" data-template="Ready for collection" type="button">Ready for collection</button>
+            </div>
+            <p class="integration-note">Templates copy to the clipboard. Secure two-way message capture is not connected yet.</p>
+          </section>
+
+          <section class="workspace-card timeline-card" id="timeline">
+            <div class="workspace-card-head">
+              <div><span class="card-mark">↻</span><h2>Timeline</h2></div>
+            </div>
+            <div class="workspace-timeline" id="workspace-timeline"></div>
+          </section>
+        </div>
+      </main>
     </div>
-    <form id="work-order-form">
-      <div class="work-grid">
-        <section class="work-panel">
-          <div class="panel-head"><span class="panel-number">1</span><span class="panel-title">Customer</span></div>
-          <div class="panel-body">
-            <div class="search-wrap">
-              <label class="quiet" for="customer-search">Find a previous customer</label>
-              <input class="control" id="customer-search" autocomplete="off" placeholder="Phone, name or place">
-              <div class="search-results hidden" id="customer-results"></div>
-            </div>
-            <div class="field-row">
-              <div class="field"><label for="customer-name">Name</label><input class="control" id="customer-name" placeholder="Can be added later"></div>
-              <div class="field"><label for="customer-phone">Phone</label><input class="control" id="customer-phone" inputmode="tel" placeholder="Can be added later"></div>
-            </div>
-            <div class="field"><label for="customer-place">Place</label><input class="control" id="customer-place" placeholder="Village, town or address"></div>
+  </div>
+
+  <nav class="mobile-bottom-nav" aria-label="Mobile navigation">
+    <a href="index.html"><span>⌂</span>Home</a>
+    <a class="active" href="bench.html" aria-current="page"><span>⌑</span>Bench</a>
+    <a href="app-jobs.html"><span>☷</span>Jobs</a>
+    <a href="app-catalog.html"><span>◇</span>Parts</a>
+    <button id="mobile-more" type="button"><span>•••</span>More</button>
+  </nav>
+
+  <dialog class="workspace-dialog" id="job-details-dialog">
+    <form id="work-order-form" class="workspace-dialog-card">
+      <div class="workspace-dialog-head">
+        <div><p class="eyebrow">Autosaved work record</p><h2>Job details</h2></div>
+        <button class="dialog-close" data-close-dialog="job-details-dialog" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="details-grid">
+        <section class="detail-section">
+          <h3>Customer</h3>
+          <div class="search-wrap">
+            <label class="quiet" for="customer-search">Find a previous customer</label>
+            <input class="control" id="customer-search" autocomplete="off" placeholder="Phone, name or place">
+            <div class="search-results hidden" id="customer-results"></div>
           </div>
-        </section>
-
-        <section class="work-panel">
-          <div class="panel-head"><span class="panel-number">2</span><span class="panel-title">Machine</span></div>
-          <div class="panel-body">
-            <div id="known-machines"></div>
-            <div class="field"><label for="machine-description">Machine</label><input class="control" id="machine-description" placeholder="Brand, model and machine type"></div>
-            <div class="field"><label for="machine-serial">Serial number</label><input class="control" id="machine-serial" placeholder="If visible"></div>
-            <details>
-              <summary class="secondary-button">Accessories received</summary>
-              <div class="chip-row" style="margin-top:10px">
-                <button type="button" class="choice-chip" data-accessory="Guide bar">Guide bar</button>
-                <button type="button" class="choice-chip" data-accessory="Chain">Chain</button>
-                <button type="button" class="choice-chip" data-accessory="Fuel present">Fuel present</button>
-                <button type="button" class="choice-chip" data-accessory="Loose parts">Loose parts</button>
-                <button type="button" class="choice-chip" data-accessory="Battery">Battery</button>
-                <button type="button" class="choice-chip" data-accessory="Charger">Charger</button>
-                <button type="button" class="choice-chip" data-accessory="Other">Other</button>
-              </div>
-            </details>
+          <div class="field-row">
+            <div class="field"><label for="customer-name">Name</label><input class="control" id="customer-name" placeholder="Can be added later"></div>
+            <div class="field"><label for="customer-phone">Phone</label><input class="control" id="customer-phone" inputmode="tel" placeholder="Can be added later"></div>
           </div>
+          <div class="field"><label for="customer-place">Place</label><input class="control" id="customer-place" placeholder="Village, town or address"></div>
         </section>
 
-        <section class="work-panel full">
-          <div class="panel-head"><span class="panel-number">3</span><span class="panel-title">Service record</span><span class="panel-hint">Autosaved</span></div>
-          <div class="panel-body">
-            <div class="field-row">
-              <div class="field"><label for="complaint">Customer complaint</label><textarea class="control" id="complaint" placeholder="Customer's own words"></textarea></div>
-              <div class="field"><label for="observation">Workshop observation</label><textarea class="control" id="observation" placeholder="What reception or the mechanic notices"></textarea></div>
+        <section class="detail-section">
+          <h3>Machine</h3>
+          <div id="known-machines"></div>
+          <div class="field"><label for="machine-description">Machine</label><input class="control" id="machine-description" placeholder="Brand, model and machine type"></div>
+          <div class="field"><label for="machine-serial">Serial number</label><input class="control" id="machine-serial" placeholder="If visible"></div>
+          <details class="accessory-picker">
+            <summary>Accessories received</summary>
+            <div class="chip-row">
+              <button type="button" class="choice-chip" data-accessory="Guide bar">Guide bar</button>
+              <button type="button" class="choice-chip" data-accessory="Chain">Chain</button>
+              <button type="button" class="choice-chip" data-accessory="Fuel present">Fuel present</button>
+              <button type="button" class="choice-chip" data-accessory="Loose parts">Loose parts</button>
+              <button type="button" class="choice-chip" data-accessory="Battery">Battery</button>
+              <button type="button" class="choice-chip" data-accessory="Charger">Charger</button>
+              <button type="button" class="choice-chip" data-accessory="Other">Other</button>
             </div>
-            <div class="field"><label for="work-done">Work done</label><textarea class="control" id="work-done" placeholder="Record diagnosis and repair work"></textarea></div>
-            <div class="section-head"><h2>Parts</h2><button class="secondary-button" id="add-part" type="button">＋ Add part</button></div>
-            <div class="part-list" id="part-list"></div>
+          </details>
+        </section>
+
+        <section class="detail-section full-span">
+          <h3>Service record</h3>
+          <div class="field-row">
+            <div class="field"><label for="complaint">Customer complaint</label><textarea class="control" id="complaint" placeholder="Customer's own words"></textarea></div>
+            <div class="field"><label for="observation">Workshop observation</label><textarea class="control" id="observation" placeholder="Confirmed findings"></textarea></div>
           </div>
+          <div class="field"><label for="work-done">Work done</label><textarea class="control" id="work-done" placeholder="Diagnosis and repair work"></textarea></div>
+          <div class="section-head"><h2>Parts</h2><button class="secondary-button" id="add-part" type="button">＋ Add part</button></div>
+          <div class="part-list" id="part-list"></div>
         </section>
 
-        <section class="work-panel full" id="intake-photo-panel" hidden>
-          <div class="panel-head"><span class="panel-number">○</span><span class="panel-title">Original intake photos</span><span class="panel-hint">Preserved with this job</span></div>
-          <div class="panel-body"><div class="work-intake-photos" id="work-intake-photos"></div></div>
+        <section class="detail-section full-span" id="intake-photo-panel" hidden>
+          <h3>Original intake photos</h3>
+          <div class="work-intake-photos" id="work-intake-photos"></div>
         </section>
 
-        <section class="work-panel full">
-          <div class="panel-head"><span class="panel-number">4</span><span class="panel-title">Billing information</span><span class="panel-hint">Optional and manual</span></div>
-          <div class="panel-body">
-            <div class="field-row">
-              <div class="field"><label for="billing-subtotal">Subtotal</label><input class="control" id="billing-subtotal" type="number" min="0" step=".01" placeholder="Blank"></div>
-              <div class="field"><label for="billing-tax">GST / tax</label><input class="control" id="billing-tax" type="number" min="0" step=".01" placeholder="Blank"></div>
-            </div>
-            <div class="field-row">
-              <div class="field"><label for="billing-total">Billing total</label><input class="control" id="billing-total" type="number" min="0" step=".01" placeholder="Blank"></div>
-              <div class="field"><label for="billing-note">Billing note</label><input class="control" id="billing-note" placeholder="Anything billing staff should know"></div>
-            </div>
+        <section class="detail-section full-span">
+          <h3>Billing information</h3>
+          <div class="field-row">
+            <div class="field"><label for="billing-subtotal">Subtotal</label><input class="control" id="billing-subtotal" type="number" min="0" step=".01" placeholder="Blank"></div>
+            <div class="field"><label for="billing-tax">GST / tax</label><input class="control" id="billing-tax" type="number" min="0" step=".01" placeholder="Blank"></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label for="billing-total">Billing total</label><input class="control" id="billing-total" type="number" min="0" step=".01" placeholder="Blank"></div>
+            <div class="field"><label for="billing-note">Billing note</label><input class="control" id="billing-note" placeholder="Anything billing staff should know"></div>
           </div>
         </section>
       </div>
-      <div class="form-footer">
-        <span class="save-state" id="save-state">Loading work order…</span>
+      <div class="workspace-dialog-footer">
+        <span class="save-state" id="details-save-state">Changes save automatically.</span>
         <button class="primary-button" id="accept-machine" type="submit">Save now</button>
       </div>
     </form>
-  </main>
+  </dialog>
+
+  <dialog class="workspace-dialog parts-dialog" id="parts-dialog">
+    <div class="workspace-dialog-card">
+      <div class="workspace-dialog-head">
+        <div><p class="eyebrow">Current job remains open</p><h2>Find and add parts</h2></div>
+        <button class="dialog-close" data-close-dialog="parts-dialog" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="parts-search-bar">
+        <input class="control" id="parts-query" type="search" placeholder="TAGRO name, STIHL number, HSN or description">
+        <button class="workspace-primary" id="parts-search-button" type="button">Search</button>
+      </div>
+      <div class="parts-search-results" id="parts-search-results">
+        <div class="workspace-empty">Enter at least two characters. Results use the live TAGRO catalogue.</div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="workspace-dialog switch-dialog" id="switch-dialog">
+    <div class="workspace-dialog-card">
+      <div class="workspace-dialog-head">
+        <div><p class="eyebrow">Keep your place</p><h2>Switch job</h2></div>
+        <button class="dialog-close" data-close-dialog="switch-dialog" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="switch-job-list" id="switch-job-list"></div>
+    </div>
+  </dialog>
+
+  <div class="mobile-drawer" id="mobile-drawer" hidden>
+    <button class="drawer-backdrop" type="button" aria-label="Close navigation"></button>
+    <div class="drawer-panel">
+      <div class="drawer-heading"><img src="tagro-logo.png" alt="TAGRO"><button type="button" aria-label="Close navigation">×</button></div>
+      <a href="index.html">My Space</a>
+      <a href="receive.html">Receive machine</a>
+      <a href="app-jobs.html">All jobs</a>
+      <a href="app-catalog.html">Parts catalogue</a>
+      <button id="sign-out" type="button">Sign out</button>
+    </div>
+  </div>
+
+  <div id="space-toast" class="space-toast" role="status" aria-live="polite"></div>
   <script src="os-manifest.js"></script>
   <script src="os-core.js"></script>
   <script src="service-core.js"></script>
+  <script src="work-space.js"></script>
   <script>
   (async()=>{
-    const session=await ServiceUI.session();if(!session)return;ServiceUI.header(session);
+    const session=await ServiceUI.session();if(!session)return;
     const id=new URLSearchParams(location.search).get('id');
     if(!id){location.replace('app-jobs.html');return}
-    await WorkOrderForm.mount({mode:'edit',id,session});
+    try{
+      await WorkOrderForm.mount({mode:'edit',id,session});
+      await JobWorkspace.mount({session,id,order:WorkOrderForm.order});
+    }catch(error){
+      document.getElementById('save-state').textContent=error.message;
+      document.getElementById('job-complaint').textContent='Unable to open this work order.';
+    }
   })()
   </script>
 </body>

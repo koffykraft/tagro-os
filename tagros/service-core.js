@@ -79,12 +79,14 @@ const WorkOrderForm={
     document.querySelectorAll('[data-accessory]').forEach(button=>button.classList.toggle('selected',(order.accessories||[]).includes(button.dataset.accessory)));
     this.parts=(order.parts||[]).map(part=>({
       partNumber:part.part_number||'',itemName:part.item_name||'',quantity:part.quantity??1,
-      unitPrice:part.unit_price??'',hsnSac:part.hsn_sac||'',gstRate:part.gst_rate??'',notes:part.notes||''
+      unitPrice:part.unit_price??'',hsnSac:part.hsn_sac||'',gstRate:part.gst_rate??'',
+      notes:part.notes||'',source:part.source||'manual'
     }));
     this.renderParts();
     this.renderIntakePhotos(order.intake);
     document.getElementById('screen-title').textContent=order.workOrder;
-    document.getElementById('screen-subtitle').textContent=ServiceUI.date(order.openedAt)+' · accepted by '+(order.openedByName||'staff');
+    const subtitle=document.getElementById('screen-subtitle');
+    if(subtitle)subtitle.textContent=ServiceUI.date(order.openedAt)+' · accepted by '+(order.openedByName||'staff');
     this.setState('All changes are saved automatically.','good');
   },
   renderIntakePhotos(intake){
@@ -104,7 +106,8 @@ const WorkOrderForm={
       accessories:[...document.querySelectorAll('[data-accessory].selected')].map(button=>button.dataset.accessory),
       complaint:this.value('complaint'),observation:this.value('observation'),workDone:this.value('work-done'),
       parts:this.parts,billingSubtotal:this.value('billing-subtotal'),billingTax:this.value('billing-tax'),
-      billingTotal:this.value('billing-total'),billingNote:this.value('billing-note')
+      billingTotal:this.value('billing-total'),billingNote:this.value('billing-note'),
+      assignedTo:document.getElementById('assigned-to')?.value||this.order?.assignedTo||null
     };
   },
   changed(){
@@ -129,11 +132,16 @@ const WorkOrderForm={
     try{
       const data=await Api.request('/work-orders/'+encodeURIComponent(this.id),{method:'PUT',body:JSON.stringify(this.payload())});
       this.order=data.workOrder;this.customerId=data.workOrder.customerId;this.setState('Saved '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}),'good');
+      document.dispatchEvent(new CustomEvent('tagro:work-order-saved',{detail:{workOrder:data.workOrder}}));
       if(explicit)Toast.show('Work order saved.');
     }catch(error){this.setState(error.message,'bad')}
     finally{this.saving=false;if(this.queued){this.queued=false;this.save(false)}}
   },
-  setState(message,kind){const node=document.getElementById('save-state');node.textContent=message;node.className='save-state'+(kind?' '+kind:'')},
+  setState(message,kind){
+    const node=document.getElementById('save-state');node.textContent=message;
+    node.className=(document.body.classList.contains('job-workspace-page')?'workspace-save':'save-state')+(kind?' '+kind:'');
+    const details=document.getElementById('details-save-state');if(details)details.textContent=message;
+  },
   async searchCustomers(){
     const query=this.value('customer-search'),results=document.getElementById('customer-results');
     if(query.length<2){this.hideSearch();return}
@@ -169,13 +177,15 @@ const WorkOrderForm={
     this.parts=[...document.querySelectorAll('.part-row')].map(row=>({
       partNumber:row.querySelector('[data-part-number]').value.trim(),itemName:row.querySelector('[data-part-name]').value.trim(),
       quantity:row.querySelector('[data-part-quantity]').value,unitPrice:row.querySelector('[data-part-price]').value,
-      hsnSac:'',gstRate:'',notes:'',source:'manual'
+      hsnSac:row.dataset.partHsn||'',gstRate:row.dataset.partGst??'',notes:row.dataset.partNotes||'',
+      source:row.dataset.partSource||'manual'
     }));
   },
   renderParts(){
     const list=document.getElementById('part-list');
-    list.innerHTML=this.parts.map((part,index)=>'<div class="part-row" data-part-index="'+index+'"><input class="control" data-part-number placeholder="Part number" value="'+ServiceUI.esc(part.partNumber||'')+'"><input class="control" data-part-name placeholder="Part name / description" value="'+ServiceUI.esc(part.itemName||'')+'"><input class="control" data-part-quantity type="number" min=".01" step=".01" placeholder="Qty" value="'+ServiceUI.esc(part.quantity??1)+'"><input class="control" data-part-price type="number" min="0" step=".01" placeholder="Price" value="'+ServiceUI.esc(part.unitPrice??'')+'"><button class="remove-part" type="button" aria-label="Remove part">×</button></div>').join('');
+    list.innerHTML=this.parts.map((part,index)=>'<div class="part-row" data-part-index="'+index+'" data-part-hsn="'+ServiceUI.esc(part.hsnSac||'')+'" data-part-gst="'+ServiceUI.esc(part.gstRate??'')+'" data-part-notes="'+ServiceUI.esc(part.notes||'')+'" data-part-source="'+ServiceUI.esc(part.source||'manual')+'"><input class="control" data-part-number placeholder="Part number" value="'+ServiceUI.esc(part.partNumber||'')+'"><input class="control" data-part-name placeholder="Part name / description" value="'+ServiceUI.esc(part.itemName||'')+'"><input class="control" data-part-quantity type="number" min=".01" step=".01" placeholder="Qty" value="'+ServiceUI.esc(part.quantity??1)+'"><input class="control" data-part-price type="number" min="0" step=".01" placeholder="Price" value="'+ServiceUI.esc(part.unitPrice??'')+'"><button class="remove-part" type="button" aria-label="Remove part">×</button></div>').join('');
     list.querySelectorAll('input').forEach(input=>input.addEventListener('input',()=>this.changed()));
     list.querySelectorAll('.remove-part').forEach((button,index)=>button.addEventListener('click',()=>{this.readParts();this.parts.splice(index,1);this.renderParts();this.changed()}));
+    document.dispatchEvent(new CustomEvent('tagro:parts-updated'));
   }
 };
