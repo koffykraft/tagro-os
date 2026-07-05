@@ -97,6 +97,8 @@ const IntakeApp = {
       machineDescription: this.value('machine-description') || null,
       serialNumber: this.value('machine-serial') || null,
       complaint: this.value('complaint') || null,
+      contactVerification: document.querySelector('input[name="contact-verification"]:checked')?.value || null,
+      contactVerificationNote: this.value('contact-verification-note') || null,
       accessories: [...document.querySelectorAll('.accessory-options input:checked')].map(input => input.value),
       status: this.draft?.status === 'ready' ? 'ready' : 'needs_review'
     };
@@ -183,6 +185,10 @@ const IntakeApp = {
     document.getElementById('machine-description').value = draft.machineDescription || '';
     document.getElementById('machine-serial').value = draft.serialNumber || '';
     document.getElementById('complaint').value = draft.complaint || '';
+    document.querySelectorAll('input[name="contact-verification"]').forEach(input => {
+      input.checked = input.value === draft.contactVerification;
+    });
+    document.getElementById('contact-verification-note').value = draft.contactVerificationNote || '';
     const selected = new Set(draft.accessories || []);
     document.querySelectorAll('.accessory-options input').forEach(input => {
       input.checked = selected.has(input.value);
@@ -303,6 +309,24 @@ const IntakeApp = {
   },
 
   async createJob() {
+    const required = [
+      ['customer-name', 'Enter the customer name.'],
+      ['customer-phone', 'Enter the customer phone number.'],
+      ['complaint', 'Record the customer complaint.']
+    ];
+    for (const [id, message] of required) {
+      if (this.value(id)) continue;
+      this.showToast(message);
+      document.getElementById(id).focus();
+      this.setStep('review');
+      return;
+    }
+    if (!document.querySelector('input[name="contact-verification"]:checked')) {
+      this.showToast('Confirm customer contact or the no-contact request.');
+      document.querySelector('input[name="contact-verification"]').focus();
+      this.setStep('review');
+      return;
+    }
     const button = document.getElementById('create-job');
     button.disabled = true;
     button.textContent = 'Creating job…';

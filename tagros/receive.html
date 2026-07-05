@@ -98,15 +98,15 @@
           </div>
 
           <div class="review-section">
-            <div class="review-section-title"><span aria-hidden="true">♙</span><strong>Customer</strong><small>Optional now</small></div>
+            <div class="review-section-title"><span aria-hidden="true">♙</span><strong>Customer</strong><small>Name and phone required</small></div>
             <div class="search-wrap">
               <label class="field-label" for="customer-search">Find an existing customer</label>
               <input class="control" id="customer-search" autocomplete="off" placeholder="Phone, name or place">
               <div class="search-results hidden" id="customer-results"></div>
             </div>
             <div class="field-row">
-              <label class="field">Name<input class="control" id="customer-name" autocomplete="name" placeholder="Can be added later"></label>
-              <label class="field">Phone<input class="control" id="customer-phone" inputmode="tel" autocomplete="tel" placeholder="Optional"></label>
+              <label class="field">Name *<input class="control" id="customer-name" autocomplete="name" required></label>
+              <label class="field">Phone *<input class="control" id="customer-phone" inputmode="tel" autocomplete="tel" required></label>
             </div>
             <label class="field">Address / Place<input class="control" id="customer-place" autocomplete="street-address" placeholder="Village, town or address"></label>
           </div>
@@ -121,7 +121,16 @@
           <div class="review-section">
             <div class="review-section-title"><span aria-hidden="true">!</span><strong>Complaint</strong><button class="text-button" id="manage-complaints" type="button">Configure quick choices</button></div>
             <div class="complaint-quick-list" id="complaint-quick-list"></div>
-            <label class="field">Customer's words<textarea class="control" id="complaint" placeholder="Choose a quick option or type exactly what the customer said"></textarea></label>
+            <label class="field">Customer's words *<textarea class="control" id="complaint" required placeholder="Choose a quick option or type exactly what the customer said"></textarea></label>
+          </div>
+
+          <div class="review-section">
+            <div class="review-section-title"><span aria-hidden="true">✓</span><strong>Customer contact</strong><small>One confirmation required</small></div>
+            <div class="contact-verification-options">
+              <label><input type="radio" name="contact-verification" value="customer_confirmed"> Customer confirmed by WhatsApp / message</label>
+              <label><input type="radio" name="contact-verification" value="staff_no_contact"> Customer requested no contact — staff sign-off</label>
+            </div>
+            <label class="field">Contact note<input class="control" id="contact-verification-note" maxlength="500" placeholder="Optional context"></label>
           </div>
 
           <details class="accessories-picker">

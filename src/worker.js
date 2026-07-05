@@ -2280,7 +2280,7 @@ async function listIntakeDrafts(env, session, url) {
 async function createIntakeDraft(request, env, session) {
   const body = await readJson(request);
   const input = intakeDraftInput(body);
-  const validation = validateWorkOrderInput(input);
+  const validation = validateIntakeDraftInput(input);
   if (validation) return json({ ok: false, error: validation }, 400);
   const branch = await resolveWorkOrderBranch(env, session, body.branchId);
   if (!branch) return json({ ok: false, error: 'Branch not found.' }, 404);
@@ -2291,12 +2291,14 @@ async function createIntakeDraft(request, env, session) {
       (id, branch_id, created_by, assigned_to, status, extraction_status,
        customer_id, customer_name, customer_phone, customer_place,
        machine_model_id, machine_description, serial_number, complaint,
+       contact_verification, contact_verification_note,
        accessories_json, job_id, created_at, updated_at)
-     VALUES (?, ?, ?, NULL, 'draft', 'not_configured', ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`
+     VALUES (?, ?, ?, NULL, 'draft', 'not_configured', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`
   ).bind(
     id, branch.id, session.id,
     input.customerId, input.customerName, input.customerPhone, input.customerPlace,
     input.machineModelId, input.machineDescription, input.serialNumber, input.complaint,
+    input.contactVerification, input.contactVerificationNote,
     JSON.stringify(input.accessories), now, now
   ).run();
   return getIntakeDraft(env, session, id, 201);
@@ -2327,7 +2329,7 @@ async function updateIntakeDraft(request, env, session, id) {
   }
   const body = await readJson(request);
   const input = intakeDraftInput(body);
-  const validation = validateWorkOrderInput(input);
+  const validation = validateIntakeDraftInput(input);
   if (validation) return json({ ok: false, error: validation }, 400);
   const allowedStatuses = new Set(['draft', 'needs_review', 'ready', 'cancelled']);
   const status = allowedStatuses.has(cleanText(body.status, 30).toLowerCase())
@@ -2351,12 +2353,14 @@ async function updateIntakeDraft(request, env, session, id) {
       assigned_to = ?, status = ?, customer_id = ?, customer_name = ?,
       customer_phone = ?, customer_place = ?, machine_model_id = ?,
       machine_description = ?, serial_number = ?, complaint = ?,
+      contact_verification = ?, contact_verification_note = ?,
       accessories_json = ?, updated_at = ?
      WHERE id = ?`
   ).bind(
     assignedTo, status, input.customerId, input.customerName, input.customerPhone,
     input.customerPlace, input.machineModelId, input.machineDescription,
-    input.serialNumber, input.complaint, JSON.stringify(input.accessories),
+    input.serialNumber, input.complaint, input.contactVerification,
+    input.contactVerificationNote, JSON.stringify(input.accessories),
     updatedAt, draft.id
   ).run();
   return getIntakeDraft(env, session, draft.id);
@@ -2517,12 +2521,29 @@ async function completeIntakeDraft(request, env, session, id) {
     machineDescription: body.machineDescription ?? draft.machine_description,
     serialNumber: body.serialNumber ?? draft.serial_number,
     complaint: body.complaint ?? draft.complaint,
+    contactVerification: body.contactVerification ?? draft.contact_verification,
+    contactVerificationNote: body.contactVerificationNote ?? draft.contact_verification_note,
     accessories: body.accessories ?? parseJsonArray(draft.accessories_json)
   }, env, session, draft);
 }
 
 function intakeDraftInput(body) {
-  return workOrderInput(body && typeof body === 'object' ? body : {});
+  const safeBody = body && typeof body === 'object' ? body : {};
+  return {
+    ...workOrderInput(safeBody),
+    contactVerification: cleanText(safeBody.contactVerification, 30).toLowerCase() || null,
+    contactVerificationNote: cleanText(safeBody.contactVerificationNote, 500) || null
+  };
+}
+
+function validateIntakeDraftInput(input) {
+  const workOrderError = validateWorkOrderInput(input);
+  if (workOrderError) return workOrderError;
+  if (input.contactVerification &&
+      !['customer_confirmed', 'staff_no_contact'].includes(input.contactVerification)) {
+    return 'Select a valid customer contact confirmation.';
+  }
+  return null;
 }
 
 function intakeDraftSelect() {
@@ -2531,6 +2552,8 @@ function intakeDraftSelect() {
     reviewer.name AS assigned_to_name, d.status, d.extraction_status,
     d.customer_id, d.customer_name, d.customer_phone, d.customer_place,
     d.machine_model_id, d.machine_description, d.serial_number, d.complaint,
+    d.contact_verification, d.contact_verification_note,
+    d.contact_verified_by, d.contact_verified_at,
     d.accessories_json, d.job_id, d.created_at, d.updated_at,
     (SELECT COUNT(*) FROM intake_photos p WHERE p.draft_id = d.id) AS photo_count
    FROM intake_drafts d
@@ -2571,6 +2594,10 @@ function publicIntakeDraft(draft) {
     machineDescription: draft.machine_description || '',
     serialNumber: draft.serial_number || '',
     complaint: draft.complaint || '',
+    contactVerification: draft.contact_verification || '',
+    contactVerificationNote: draft.contact_verification_note || '',
+    contactVerifiedBy: draft.contact_verified_by || null,
+    contactVerifiedAt: draft.contact_verified_at || null,
     accessories: parseJsonArray(draft.accessories_json),
     jobId: draft.job_id || null,
     photoCount: Number(draft.photo_count || 0),
@@ -2595,6 +2622,7 @@ function publicIntakePhoto(photo, draftId) {
 }
 
 const JOB_EVENT_STATUS = {
+  job_received: 'received',
   machine_received: 'received',
   inspection_started: 'inspecting',
   inspection_completed: 'awaiting_approval',
@@ -2624,7 +2652,7 @@ const JOB_STATUS_LABELS = {
 };
 
 const JOB_STATUS_EVENTS = {
-  received: ['machine_received'],
+  received: ['job_received', 'machine_received'],
   inspecting: ['inspection_started'],
   awaiting_approval: ['inspection_completed'],
   approved: ['estimate_approved'],
@@ -2719,6 +2747,16 @@ function validateWorkOrderInput(input) {
   return null;
 }
 
+function validateIntakeCompletion(input, contactVerification) {
+  if (!input.customerName) return 'Customer name is required before creating the job.';
+  if (!input.customerPhone) return 'Customer phone is required before creating the job.';
+  if (!input.complaint) return 'Customer complaint is required before creating the job.';
+  if (!['customer_confirmed', 'staff_no_contact'].includes(contactVerification)) {
+    return 'Confirm customer contact or record the customer no-contact request.';
+  }
+  return null;
+}
+
 function pendingCustomerId(branchId) {
   return `customer_pending_${cleanText(branchId, 70)}`;
 }
@@ -2809,6 +2847,12 @@ async function createWorkOrderFromBody(body, env, session, intakeDraft = null) {
   const input = workOrderInput(body);
   const validation = validateWorkOrderInput(input);
   if (validation) return json({ ok: false, error: validation }, 400);
+  const contactVerification = cleanText(body.contactVerification, 30).toLowerCase();
+  const contactVerificationNote = cleanText(body.contactVerificationNote, 500) || null;
+  if (intakeDraft) {
+    const completionError = validateIntakeCompletion(input, contactVerification);
+    if (completionError) return json({ ok: false, error: completionError }, 400);
+  }
   const branch = await resolveWorkOrderBranch(env, session, body.branchId);
   if (!branch) return json({ ok: false, error: 'Branch not found.' }, 404);
 
@@ -2874,23 +2918,76 @@ async function createWorkOrderFromBody(body, env, session, intakeDraft = null) {
     }
   }
 
+  let customerMachineId = null;
+  if (intakeDraft && (input.serialNumber || input.machineDescription || input.machineModelId)) {
+    const existingMachine = input.serialNumber
+      ? await env.DB.prepare(
+          `SELECT id, customer_id FROM customer_machines
+           WHERE UPPER(serial_number) = ? AND active = 1 LIMIT 1`
+        ).bind(input.serialNumber).first()
+      : null;
+    if (existingMachine && existingMachine.customer_id !== customerId) {
+      return json({
+        ok: false,
+        error: 'This serial number belongs to another customer. Transfer ownership before completing intake.'
+      }, 409);
+    }
+    if (existingMachine) {
+      customerMachineId = existingMachine.id;
+      statements.push(
+        env.DB.prepare(
+          `UPDATE customer_machines SET
+            last_seen_at = ?, updated_at = ?,
+            machine_model_id = COALESCE(machine_model_id, ?),
+            display_name = CASE WHEN display_name = '' THEN ? ELSE display_name END
+           WHERE id = ?`
+        ).bind(now, now, input.machineModelId, input.machineDescription || input.serialNumber, customerMachineId)
+      );
+    } else {
+      customerMachineId = makeId('customer_machine');
+      const displayName = input.machineDescription || `Machine ${input.serialNumber || ''}`.trim();
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO customer_machines
+            (id, customer_id, machine_model_id, display_name, serial_number, notes,
+             provisional, active, first_seen_at, last_seen_at, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, NULL, ?, 1, ?, ?, ?, ?, ?)`
+        ).bind(
+          customerMachineId, customerId, input.machineModelId, displayName,
+          input.serialNumber, input.machineModelId ? 0 : 1,
+          now, now, session.id, now, now
+        ),
+        env.DB.prepare(
+          `INSERT INTO machine_ownership_history
+            (id, machine_id, customer_id, started_at, ended_at, transferred_by, note, created_at)
+           VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`
+        ).bind(
+          makeId('ownership'), customerMachineId, customerId, now,
+          session.id, 'Machine received through intake', now
+        )
+      );
+    }
+  }
+
   const jobId = makeId('job');
   const workOrder = makeWorkOrder(branch.code);
   const eventData = JSON.stringify({
     urgency: 'normal',
     accessories: input.accessories,
     intakeNotes: null,
+    contactVerification: contactVerification || null,
+    contactVerificationNote,
     vanilla: true
   });
   statements.push(
     env.DB.prepare(
       `INSERT INTO repair_jobs
-        (id, work_order, branch_id, customer_id, machine_model_id, serial_number,
+       (id, work_order, branch_id, customer_id, machine_model_id, serial_number,
          reported_problem, opened_by, opened_at, updated_at, customer_machine_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       jobId, workOrder, branch.id, customerId, input.machineModelId,
-      input.serialNumber, input.complaint || '', session.id, now, now
+      input.serialNumber, input.complaint || '', session.id, now, now, customerMachineId
     ),
     env.DB.prepare(
       `INSERT INTO work_order_details
@@ -2909,8 +3006,8 @@ async function createWorkOrderFromBody(body, env, session, intakeDraft = null) {
     env.DB.prepare(
       `INSERT INTO job_events
         (id, job_id, event_type, event_data_json, created_by, created_at, server_received_at)
-       VALUES (?, ?, 'machine_received', ?, ?, ?, ?)`
-    ).bind(makeId('event'), jobId, eventData, session.id, now, now),
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(makeId('event'), jobId, intakeDraft ? 'job_received' : 'machine_received', eventData, session.id, now, now),
     ...vanillaPartStatements(env, jobId, input.parts, now)
   );
   if (intakeDraft) {
@@ -2925,12 +3022,15 @@ async function createWorkOrderFromBody(body, env, session, intakeDraft = null) {
          SET status = 'completed', job_id = ?, customer_id = ?, customer_name = ?,
            customer_phone = ?, customer_place = ?, machine_model_id = ?,
            machine_description = ?, serial_number = ?, complaint = ?,
+           contact_verification = ?, contact_verification_note = ?,
+           contact_verified_by = ?, contact_verified_at = ?,
            accessories_json = ?, updated_at = ?
          WHERE id = ? AND job_id IS NULL`
       ).bind(
         jobId, customerId, input.customerName, input.customerPhone,
         input.customerPlace, input.machineModelId, input.machineDescription,
-        input.serialNumber, input.complaint, JSON.stringify(input.accessories),
+        input.serialNumber, input.complaint, contactVerification,
+        contactVerificationNote, session.id, now, JSON.stringify(input.accessories),
         now, intakeDraft.id
       )
     );

@@ -1,8 +1,9 @@
 import { readFile } from 'node:fs/promises';
 
-const [worker, migration, receive, intake, work, workOrderForm, sw] = await Promise.all([
+const [worker, migration, contactMigration, receive, intake, work, workOrderForm, sw] = await Promise.all([
   readFile(new URL('../src/worker.js', import.meta.url), 'utf8'),
   readFile(new URL('../migrations/0009_intake_drafts.sql', import.meta.url), 'utf8'),
+  readFile(new URL('../migrations/0011_intake_contact_verification.sql', import.meta.url), 'utf8'),
   readFile(new URL('../tagros/receive.html', import.meta.url), 'utf8'),
   readFile(new URL('../tagros/intake.js', import.meta.url), 'utf8'),
   readFile(new URL('../tagros/work.html', import.meta.url), 'utf8'),
@@ -33,7 +34,16 @@ assert(!work.includes("location.replace('receive.html'"), 'Work page still redir
 assert(work.includes("WorkOrderForm.mount({mode:'edit'"), 'Existing work-order editing is not preserved');
 assert(work.includes('id="intake-photo-panel"') && workOrderForm.includes('renderIntakePhotos(order.intake)'), 'Completed intake photos are not shown on the work order');
 assert(worker.includes('FROM intake_drafts WHERE job_id = ?'), 'Work-order API does not attach completed intake photos');
-assert(sw.includes("'tagro-white-v21'"), 'Service worker cache was not advanced');
+assert(contactMigration.includes("customer_confirmed', 'staff_no_contact"), 'Contact verification choices are not constrained');
+assert(receive.includes('id="customer-name"') && receive.includes('id="customer-phone"') &&
+  receive.includes('id="complaint"') && (receive.match(/required/g) || []).length >= 3,
+  'Mandatory intake fields are not enforced in the form');
+assert(intake.includes("input[name=\"contact-verification\"]:checked") &&
+  worker.includes('validateIntakeCompletion'), 'Contact confirmation does not block completion');
+assert(worker.includes("intakeDraft ? 'job_received' : 'machine_received'"), 'Completed intake does not record job_received');
+assert(worker.includes("'Machine received through intake'") &&
+  worker.includes('customerMachineId'), 'Completed intake does not create or link the physical machine');
+assert(sw.includes("'tagro-white-v22'"), 'Service worker cache was not advanced');
 
 for (const retired of ['Rubber Biju', 'Jose Sawmill', 'Thomas Thumpassery', '9447000001', '9447000002', '9656361846']) {
   assert(!receive.includes(retired) && !intake.includes(retired), `Retired sample data found: ${retired}`);
