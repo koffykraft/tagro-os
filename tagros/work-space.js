@@ -9,14 +9,6 @@ const JobWorkspace = {
   frequentKey: '',
   toastTimer: null,
   partsTimer: null,
-  modelKey: '',
-  benchModelOverride: '',
-  modelParts: [],
-  loadedModelKey: '',
-  diagramAsset: null,
-  modelChoicesLoaded: false,
-  activeSection: '',
-  partsMode: 'fast',
 
   async mount({ session, id, order }) {
     this.session = session;
@@ -26,7 +18,6 @@ const JobWorkspace = {
     this.applyIdentity();
     this.bind();
     this.renderOrder();
-    this.consumePartHandoff();
     await this.loadSupplementary();
   },
 
@@ -46,40 +37,16 @@ const JobWorkspace = {
     document.getElementById('edit-details').addEventListener('click', () => this.openDialog('job-details-dialog'));
     document.getElementById('edit-bench-details').addEventListener('click', () => this.openDialog('job-details-dialog'));
     document.getElementById('open-parts-search').addEventListener('click', () => this.openParts());
-    document.getElementById('open-visual-reference').addEventListener('click', async () => {
-      await this.openParts();
-      this.setPartsMode('visual');
-    });
     document.getElementById('edit-frequent').addEventListener('click', () => this.openParts());
     document.getElementById('add-manual-part').addEventListener('click', () => this.addManualPart());
     document.getElementById('create-estimate').addEventListener('click', () => this.createEstimate());
-    document.getElementById('parts-search-button').addEventListener('click', () => this.searchParts());
-    document.getElementById('parts-fast-mode').addEventListener('click', () => this.setPartsMode('fast'));
-    document.getElementById('parts-visual-mode').addEventListener('click', () => this.setPartsMode('visual'));
-    document.getElementById('parts-model-select').addEventListener('change', async event => {
-      this.modelKey = event.target.value;
-      this.benchModelOverride = this.modelKey;
-      this.loadedModelKey = '';
-      document.getElementById('parts-model-title').textContent = this.modelLabel(this.modelKey);
-      document.getElementById('parts-query').value = '';
-      this.updatePartsLinks();
-      await this.loadWorkbenchParts();
-      await this.loadModelParts();
-    });
-    document.getElementById('parts-query').addEventListener('input', () => {
-      clearTimeout(this.partsTimer);
-      this.partsTimer = setTimeout(() => this.searchParts(), 220);
-    });
-    document.getElementById('parts-query').addEventListener('keydown', event => {
-      if (event.key === 'Enter') { event.preventDefault(); this.searchParts(); }
-    });
-    document.getElementById('bench-part-search-button').addEventListener('click', () => this.searchBenchParts());
+    document.getElementById('bench-part-search-button').addEventListener('click', () => this.searchParts());
     document.getElementById('bench-part-query').addEventListener('input', () => {
       clearTimeout(this.partsTimer);
-      this.partsTimer = setTimeout(() => this.searchBenchParts(), 180);
+      this.partsTimer = setTimeout(() => this.searchParts(), 180);
     });
     document.getElementById('bench-part-query').addEventListener('keydown', event => {
-      if (event.key === 'Enter') { event.preventDefault(); this.searchBenchParts(); }
+      if (event.key === 'Enter') { event.preventDefault(); this.searchParts(); }
     });
     document.getElementById('switch-job').addEventListener('click', () => this.openSwitch());
     document.getElementById('previous-job').addEventListener('click', () => this.navigateRelative(-1));
@@ -122,7 +89,6 @@ const JobWorkspace = {
     await Promise.all([
       this.loadQueue(),
       this.loadEstimate(),
-      this.loadWorkbenchParts(),
       ['manager', 'owner'].includes(role) ? this.loadStaff() : Promise.resolve()
     ]);
     this.renderFrequentParts();
@@ -158,12 +124,6 @@ const JobWorkspace = {
     this.renderTimeline();
     this.renderCommunication();
     this.renderBenchFacts();
-    if (!this.benchModelOverride) this.modelKey = this.machineModel(order.machineDescription || machine);
-    const globalUrl = `app-catalog.html?job=${encodeURIComponent(this.id)}&model=${encodeURIComponent(this.modelKey)}`;
-    document.getElementById('global-parts-link').href = globalUrl;
-    document.getElementById('model-reference-link').href = globalUrl;
-    document.getElementById('open-global-parts').href = globalUrl;
-    document.getElementById('order-parts-link').href = globalUrl;
   },
 
   renderBenchFacts() {
@@ -427,333 +387,58 @@ const JobWorkspace = {
     }
   },
 
-  legacyOpenParts() {
-    this.openDialog('parts-dialog');
-    document.getElementById('parts-query').focus();
+  openParts() {
+    const input = document.getElementById('bench-part-query');
+    document.getElementById('parts-reference').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    input.focus({ preventScroll: true });
+    if (input.value.trim().length >= 2) this.searchParts();
   },
 
-  async legacySearchParts() {
-    const query = document.getElementById('parts-query').value.trim();
-    const host = document.getElementById('parts-search-results');
+  async searchParts() {
+    const query = document.getElementById('bench-part-query').value.trim();
+    const host = document.getElementById('bench-fast-results');
     if (query.length < 2) {
       host.innerHTML = '<div class="workspace-empty">Enter at least two characters.</div>';
       return;
     }
-    host.innerHTML = '<div class="workspace-loading">Searching live catalogue…</div>';
+    host.innerHTML = '<div class="workspace-loading">Finding TAGRO parts…</div>';
     try {
-      const data = await Api.request(`/catalog?type=part&limit=40&query=${encodeURIComponent(query)}`);
-      const items = data.items || [];
-      host.innerHTML = items.length ? items.map((item, index) => `
-        <article class="parts-result">
-          <div><strong>${ServiceUI.esc(item.tagro_name || item.item_name)}</strong><span>${ServiceUI.esc(item.part_number)}</span><small>${ServiceUI.esc(item.stihl_name || '')} · HSN ${ServiceUI.esc(item.hsn_sac || 'pending')} · GST ${ServiceUI.esc(String(item.gst_rate ?? 'pending'))}%</small></div>
-          <b class="parts-result-price">${this.money(item.retail_price ?? item.mrp)}</b>
-          <div class="parts-result-actions"><button type="button" data-pin-result="${index}">Pin</button><button class="add-result" type="button" data-add-result="${index}">Add</button></div>
-        </article>`).join('') : '<div class="workspace-empty">No matching parts.</div>';
-      host.querySelectorAll('[data-add-result]').forEach(button => button.addEventListener('click', () => this.addCatalogPart(items[Number(button.dataset.addResult)])));
-      host.querySelectorAll('[data-pin-result]').forEach(button => button.addEventListener('click', () => this.pinPart(items[Number(button.dataset.pinResult)])));
-    } catch (error) {
-      host.innerHTML = `<div class="workspace-empty">${ServiceUI.esc(error.message)}</div>`;
-    }
-  },
-
-  machineModel(value) {
-    const match = String(value || '').toUpperCase().match(/\b(MS|MSE|FS|FSA|SR|BR|BG|HS|HT|TS|RE|RM)\s*-?\s*(\d{2,4}[A-Z]?)\b/);
-    return match ? `${match[1]}${match[2]}` : '';
-  },
-
-  consumePartHandoff() {
-    const key = `tagro_parts_handoff_${this.id}`;
-    const pending = OS.get(key, []);
-    if (!Array.isArray(pending) || !pending.length) return;
-    WorkOrderForm.readParts();
-    for (const item of pending) {
-      if (!item?.partNumber || !item?.itemName) continue;
-      if (WorkOrderForm.parts.some(part => part.partNumber === item.partNumber)) continue;
-      WorkOrderForm.parts.push({ ...item, quantity: Number(item.quantity) || 1, draft: false });
-    }
-    OS.set(key, []);
-    WorkOrderForm.renderParts();
-    WorkOrderForm.changed();
-    this.showToast(`${pending.length} selected part${pending.length === 1 ? '' : 's'} added to this job.`);
-  },
-
-  async openParts() {
-    if (!this.modelKey) this.modelKey = this.machineModel(this.order?.machineDescription || ServiceUI.machine(this.order));
-    await this.loadModelChoices();
-    const modelSelect = document.getElementById('parts-model-select');
-    if (this.modelKey && ![...modelSelect.options].some(option => option.value === this.modelKey)) {
-      modelSelect.add(new Option(this.modelLabel(this.modelKey), this.modelKey));
-    }
-    modelSelect.value = this.modelKey;
-    document.getElementById('parts-model-title').textContent = this.modelLabel(this.modelKey);
-    document.getElementById('parts-destination').textContent = this.order?.workOrder || 'current work order';
-    this.updatePartsLinks();
-    this.openDialog('parts-dialog');
-    document.getElementById('parts-query').value = '';
-    await this.loadModelParts();
-    document.getElementById('parts-query').focus();
-  },
-
-  setPartsMode(mode, section = '') {
-    this.partsMode = mode === 'visual' ? 'visual' : 'fast';
-    document.getElementById('parts-fast-mode').classList.toggle('active', this.partsMode === 'fast');
-    document.getElementById('parts-visual-mode').classList.toggle('active', this.partsMode === 'visual');
-    document.getElementById('parts-visual-tools').hidden = this.partsMode !== 'visual';
-    if (section) this.activeSection = section;
-    document.getElementById('parts-query').value = '';
-    if (this.partsMode === 'visual' && this.activeSection) {
-      const carousel = document.getElementById('parts-assembly-carousel');
-      carousel.querySelectorAll('button').forEach(button => button.classList.toggle('active', button.dataset.section === this.activeSection));
-      this.renderPartResults(this.modelParts.filter(part => part.section === this.activeSection));
-    } else {
-      document.getElementById('parts-search-results').innerHTML =
-        '<div class="workspace-empty"><strong>Fast Mode ready.</strong><span>Type a TAGRO name, alias or part number to see the current price and add it.</span></div>';
-      document.getElementById('parts-query').focus();
-    }
-  },
-
-  async loadModelChoices() {
-    if (this.modelChoicesLoaded) return;
-    const select = document.getElementById('parts-model-select');
-    const data = await Api.request('/knowledge/models');
-    const models = (data.models || []).filter(model => model.hasParts);
-    select.innerHTML = models.map(model =>
-      `<option value="${ServiceUI.esc(model.key)}">${ServiceUI.esc(model.label)}</option>`
-    ).join('');
-    this.modelChoicesLoaded = true;
-  },
-
-  modelLabel(model) {
-    return model ? model.replace(/^([A-Z]+)(\d)/, '$1 $2') : 'this machine';
-  },
-
-  updatePartsLinks() {
-    const globalUrl = `app-catalog.html?job=${encodeURIComponent(this.id)}&model=${encodeURIComponent(this.modelKey)}`;
-    document.getElementById('open-global-parts').href = globalUrl;
-    document.getElementById('global-parts-link').href = globalUrl;
-    document.getElementById('model-reference-link').href = globalUrl;
-    document.getElementById('order-parts-link').href = globalUrl;
-  },
-
-  async ensureModelParts() {
-    if (!this.modelKey) {
-      this.modelParts = [];
-      this.loadedModelKey = '';
-      this.diagramAsset = null;
-      return;
-    }
-    if (this.loadedModelKey === this.modelKey && this.modelParts.length) return;
-    const [data, assetData] = await Promise.all([
-      Api.request(`/knowledge/parts?model=${encodeURIComponent(this.modelKey)}&limit=500`),
-      Api.request(`/knowledge/assets?model=${encodeURIComponent(this.modelKey)}`).catch(() => ({ assets: [] }))
-    ]);
-    this.modelParts = (data.parts || []).map(part => this.catalogItem(part));
-    this.diagramAsset = (assetData.assets || []).find(asset => asset.type === 'pdf' || /parts|catalog/i.test(asset.name || '')) || null;
-    this.loadedModelKey = this.modelKey;
-  },
-
-  async loadWorkbenchParts() {
-    const host = document.getElementById('common-model-parts');
-    document.getElementById('bench-parts-model').textContent = this.modelLabel(this.modelKey);
-    if (!this.modelKey) {
-      host.innerHTML = '<div class="workspace-empty">Add the machine model to load its parts.</div>';
-      return;
-    }
-    host.innerHTML = '<div class="workspace-loading">Preparing machine parts...</div>';
-    try {
-      await this.ensureModelParts();
-      this.renderCommonModelParts();
-    } catch (error) {
-      host.innerHTML = `<div class="workspace-empty">${ServiceUI.esc(error.message)}</div>`;
-    }
-  },
-
-  commonModelParts() {
-    const keywords = ['air filter', 'fuel filter', 'spark plug', 'starter rope', 'clutch', 'sprocket', 'oil pump', 'av mount'];
-    const model = this.modelLabel(this.modelKey).toLowerCase();
-    const chosen = [];
-    const seen = new Set();
-    for (const keyword of keywords) {
-      const candidates = this.modelParts.filter(part => {
-        const name = `${part.tagro_name} ${part.stihl_name}`.toLowerCase();
-        return name.includes(keyword) && !seen.has(part.part_number) && (part.retail_price !== '' || part.mrp !== '');
-      }).sort((a, b) => {
-        const aName = `${a.tagro_name} ${a.stihl_name}`.toLowerCase();
-        const bName = `${b.tagro_name} ${b.stihl_name}`.toLowerCase();
-        const rank = name =>
-          (/pack of|tool|wrench|boot/.test(name) ? 50 : 0) -
-          (name.includes(model) ? 10 : 0) -
-          (name.startsWith(keyword) ? 4 : 0) +
-          name.length / 100;
-        return rank(aName) - rank(bName);
-      });
-      if (candidates[0]) {
-        seen.add(candidates[0].part_number);
-        chosen.push(candidates[0]);
-      }
-    }
-    return chosen.slice(0, 8);
-  },
-
-  renderCommonModelParts() {
-    const host = document.getElementById('common-model-parts');
-    const items = this.commonModelParts();
-    host.innerHTML = items.length ? items.map((item, index) => `
-      <button type="button" data-common-part="${index}">
-        <strong>${ServiceUI.esc(item.tagro_name || item.stihl_name || item.part_number)}</strong>
-        <span>${this.money(item.retail_price ?? item.mrp)}</span>
-      </button>`).join('') : '<div class="workspace-empty">Pin familiar parts as you use them.</div>';
-    host.querySelectorAll('[data-common-part]').forEach(button => button.addEventListener('click', () => {
-      this.addCatalogPart(items[Number(button.dataset.commonPart)], 1, false);
-    }));
-  },
-
-  searchBenchParts() {
-    const query = document.getElementById('bench-part-query').value.trim();
-    const host = document.getElementById('bench-fast-results');
-    if (query.length < 2) {
-      host.innerHTML = '<div class="workspace-empty">Type a familiar part name to see price and add it.</div>';
-      return;
-    }
-    const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
-    const items = this.modelParts.filter(item => {
-      const text = [item.part_number, item.tagro_name, item.stihl_name, ...(item.aliases || [])].join(' ').toLowerCase();
-      return tokens.every(token => text.includes(token));
-    }).slice(0, 10);
-    host.innerHTML = items.length ? items.map((item, index) => `
-      <article class="bench-part-result">
-        <div><strong>${ServiceUI.esc(item.tagro_name || item.stihl_name || item.part_number)}</strong>
-        <small>${ServiceUI.esc(item.part_number)}${item.stihl_name ? ` - ${ServiceUI.esc(item.stihl_name)}` : ''}</small></div>
-        <b>${this.money(item.retail_price ?? item.mrp)}</b>
-        <label>Qty<input type="number" min="1" step="1" value="1" data-bench-qty="${index}"></label>
-        <button type="button" data-bench-add="${index}">Add</button>
-      </article>`).join('') : '<div class="workspace-empty">No matching part for this machine. Try fewer words or open STIHL reference.</div>';
-    host.querySelectorAll('[data-bench-add]').forEach(button => button.addEventListener('click', () => {
-      const index = Number(button.dataset.benchAdd);
-      const quantity = Number(host.querySelector(`[data-bench-qty="${index}"]`)?.value) || 1;
-      this.addCatalogPart(items[index], quantity, false);
-    }));
-  },
-
-  async loadModelParts() {
-    const host = document.getElementById('parts-search-results');
-    const carousel = document.getElementById('parts-assembly-carousel');
-    if (!this.modelKey) {
-      this.modelParts = [];
-      carousel.innerHTML = '';
-      host.innerHTML = '<div class="workspace-empty"><strong>Model not identified.</strong><span>Search globally or add the model to this job first.</span></div>';
-      return;
-    }
-    host.innerHTML = '<div class="workspace-loading">Loading model assemblies…</div>';
-    try {
-      await this.ensureModelParts();
-      const diagramAsset = this.diagramAsset;
-      const diagramLink = document.getElementById('parts-diagram-link');
-      diagramLink.hidden = !diagramAsset;
-      if (diagramAsset) diagramLink.href = diagramAsset.url;
-      const sections = [...new Set(this.modelParts.map(part => part.section).filter(Boolean))];
-      this.activeSection = sections[0] || '';
-      carousel.innerHTML = sections.length ? sections.map((section, index) =>
-        `<button type="button" class="${index === 0 ? 'active' : ''}" data-section="${ServiceUI.esc(section)}">${ServiceUI.esc(section)}</button>`
-      ).join('') : '<span class="assembly-empty">No uploaded assembly map yet—search remains available.</span>';
-      carousel.querySelectorAll('[data-section]').forEach(button => button.addEventListener('click', () => {
-        this.partsMode = 'visual';
-        this.activeSection = button.dataset.section;
-        carousel.querySelectorAll('button').forEach(item => item.classList.toggle('active', item === button));
-        this.renderPartResults(this.modelParts.filter(part => part.section === this.activeSection));
+      const data = await Api.request(`/knowledge/parts?query=${encodeURIComponent(query)}&limit=40`);
+      const items = (data.parts || []).map(part => ({
+        part_number: part.partNumber || '',
+        item_name: part.tagroName || part.name || '',
+        tagro_name: part.tagroName || part.name || '',
+        stihl_name: part.stihlName || '',
+        aliases: Array.isArray(part.aliases) ? part.aliases : [],
+        hsn_sac: part.hsn || '',
+        gst_rate: part.gst ?? '',
+        retail_price: part.retailPrice ?? '',
+        mrp: part.mrp ?? '',
+        data_source: 'parts_master'
       }));
-      this.setPartsMode('fast');
-    } catch (error) {
-      carousel.innerHTML = '';
-      host.innerHTML = `<div class="workspace-empty">${ServiceUI.esc(error.message)}</div>`;
-    }
-  },
-
-  catalogItem(part) {
-    return {
-      part_number: part.currentPartNumber || part.partNumber || '',
-      item_name: part.stihlName || part.name || part.tagroName || '',
-      stihl_name: part.stihlName || part.name || '',
-      tagro_name: part.tagroName || '',
-      hsn_sac: part.hsn || '',
-      gst_rate: part.gst ?? '',
-      retail_price: part.retailPrice ?? '',
-      mrp: part.mrp ?? '',
-      data_source: (part.sources || []).join('+') || 'knowledge_catalog',
-      section: part.section || '',
-      reference: part.reference || '',
-      mapping_status: part.mappingStatus || '',
-      aliases: Array.isArray(part.aliases) ? part.aliases : []
-    };
-  },
-
-  async searchParts() {
-    const query = document.getElementById('parts-query').value.trim();
-    const host = document.getElementById('parts-search-results');
-    if (query.length < 2) {
-      if (this.partsMode === 'visual' && this.activeSection) this.renderPartResults(this.modelParts.filter(part => part.section === this.activeSection));
-      else host.innerHTML = '<div class="workspace-empty">Type two characters or choose an assembly.</div>';
-      return;
-    }
-    host.innerHTML = '<div class="workspace-loading">Finding matching parts…</div>';
-    try {
-      const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
-      const merged = this.modelParts.filter(item => {
-        const text = [item.part_number, item.tagro_name, item.stihl_name, ...(item.aliases || [])].join(' ').toLowerCase();
-        return tokens.every(token => text.includes(token));
-      });
-      const seen = new Set();
-      const items = merged.filter(item => {
-        const key = String(item.part_number || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
-        if (!key || seen.has(key)) return false;
-        seen.add(key); return true;
-      }).slice(0, 40);
-      this.renderPartResults(items, query);
+      host.innerHTML = items.length ? items.map((item, index) => `
+        <article class="bench-part-result">
+          <div><strong>${ServiceUI.esc(item.tagro_name || item.part_number)}</strong>
+          <small>${ServiceUI.esc(item.part_number)}${item.stihl_name ? ` · ${ServiceUI.esc(item.stihl_name)}` : ''}</small></div>
+          <b>${this.money(item.retail_price ?? item.mrp)}</b>
+          <label>Qty<input type="number" min="1" step="1" value="1" data-bench-qty="${index}"></label>
+          <button type="button" data-pin-result="${index}">Pin</button>
+          <button type="button" data-bench-add="${index}">Add</button>
+        </article>`).join('') : '<div class="workspace-empty">No matching TAGRO part. Try fewer words or a part number.</div>';
+      host.querySelectorAll('[data-bench-add]').forEach(button => button.addEventListener('click', () => {
+        const index = Number(button.dataset.benchAdd);
+        const quantity = Number(host.querySelector(`[data-bench-qty="${index}"]`)?.value) || 1;
+        this.addCatalogPart(items[index], quantity);
+      }));
+      host.querySelectorAll('[data-pin-result]').forEach(button => button.addEventListener('click', () => {
+        this.pinPart(items[Number(button.dataset.pinResult)]);
+      }));
     } catch (error) {
       host.innerHTML = `<div class="workspace-empty">${ServiceUI.esc(error.message)}</div>`;
     }
   },
 
-  renderPartResults(items, query = '') {
-    const host = document.getElementById('parts-search-results');
-    host.innerHTML = items.length ? items.map((item, index) => {
-      const officialName = item.stihl_name || item.item_name || 'Unnamed part';
-      const workshopName = item.tagro_name || '';
-      const primaryName = workshopName || officialName;
-      const officialDetail = officialName.toLowerCase() !== primaryName.toLowerCase() ? `Official STIHL: ${ServiceUI.esc(officialName)} · ` : '';
-      return `<article class="parts-result">
-        <div class="parts-result-main"><span class="diagram-reference">${ServiceUI.esc(item.reference || String(index + 1))}</span><div><strong>${ServiceUI.esc(primaryName)}</strong><span>${ServiceUI.esc(item.part_number)}</span><small>${officialDetail}HSN ${ServiceUI.esc(item.hsn_sac || 'pending')} · GST ${ServiceUI.esc(String(item.gst_rate ?? 'pending'))}%</small></div></div>
-        <b class="parts-result-price">${this.money(item.retail_price ?? item.mrp)}</b>
-        <div class="parts-result-actions">${this.partsMode === 'fast' && item.section ? `<button type="button" data-view-diagram="${index}">View diagram</button>` : ''}${workshopName ? '' : `<button type="button" data-need-tagro-name="${index}">Needs TAGRO Name</button>`}<button type="button" data-pin-result="${index}">Pin</button><label>Qty<input data-result-qty="${index}" type="number" min="1" step="1" value="1"></label><button class="add-result" type="button" data-add-result="${index}">Add</button></div>
-      </article>`;
-    }).join('') : `<div class="workspace-empty"><strong>No exact match${query ? ` for “${ServiceUI.esc(query)}”` : ''}.</strong><span>Try fewer words, choose an assembly, or open Global parts.</span></div>`;
-    host.querySelectorAll('[data-add-result]').forEach(button => button.addEventListener('click', () => {
-      const index = Number(button.dataset.addResult);
-      const quantity = Number(host.querySelector(`[data-result-qty="${index}"]`)?.value) || 1;
-      this.addCatalogPart(items[index], quantity);
-    }));
-    host.querySelectorAll('[data-pin-result]').forEach(button => button.addEventListener('click', () => this.pinPart(items[Number(button.dataset.pinResult)])));
-    host.querySelectorAll('[data-view-diagram]').forEach(button => button.addEventListener('click', () => {
-      const item = items[Number(button.dataset.viewDiagram)];
-      this.setPartsMode('visual', item.section);
-    }));
-    host.querySelectorAll('[data-need-tagro-name]').forEach(button => button.addEventListener('click', async () => {
-      const item = items[Number(button.dataset.needTagroName)];
-      button.disabled = true;
-      try {
-        await Api.request('/catalog/name-requests', {
-          method: 'POST',
-          body: JSON.stringify({ model: this.modelKey, partNumber: item.part_number, stihlName: item.stihl_name || item.item_name })
-        });
-        button.textContent = 'Marked for naming';
-      } catch (error) {
-        button.disabled = false;
-        this.showToast(error.message);
-      }
-    }));
-  },
-
-  addCatalogPart(item, quantity = 1, closeDialog = true) {
+  addCatalogPart(item, quantity = 1) {
     if (!item) return;
     WorkOrderForm.readParts();
     const partNumber = item.part_number || '';
@@ -769,14 +454,13 @@ const JobWorkspace = {
         hsnSac: item.hsn_sac || '',
         gstRate: item.gst_rate ?? '',
         notes: '',
-        source: item.data_source || 'catalog',
+        source: item.data_source || 'parts_master',
         draft: false
       });
     }
     WorkOrderForm.renderParts();
     WorkOrderForm.changed();
     this.renderBasket();
-    if (closeDialog && document.getElementById('parts-dialog').open) document.getElementById('parts-dialog').close();
     this.showToast(existing ? 'Quantity updated on this job.' : 'Part added to this job.');
   },
 
