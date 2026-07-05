@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="os-shell.css">
 <script src="os-manifest.js"></script>
 <script src="os-core.js"></script>
+<script src="app-shell.js"></script>
 </head>
 <body>
 <header class="app-topbar">
@@ -50,6 +51,15 @@
           <span class="detail-code" id="detail-code"></span>
           <h3 class="detail-name" id="detail-name"></h3>
           <div class="detail-list" id="detail-list"></div>
+          <div class="customer-record-summary" id="customer-record-summary"></div>
+          <div class="customer-documents">
+            <div class="customer-documents-head"><strong>Machines</strong><span>Service ownership</span></div>
+            <div class="customer-document-list" id="customer-machine-list"></div>
+          </div>
+          <div class="customer-documents">
+            <div class="customer-documents-head"><strong>Service visits</strong><span>Newest first</span></div>
+            <div class="customer-document-list" id="customer-job-list"></div>
+          </div>
           <div class="customer-documents">
             <div class="customer-documents-head"><strong>Documents</strong><span>Private customer files</span></div>
             <div class="customer-document-list" id="customer-document-list"></div>
@@ -66,7 +76,7 @@
           <div class="form-grid">
             <div class="field"><label for="customer-type">Customer type *</label><select class="control" id="customer-type" required><option value="individual">Individual</option><option value="business">Business</option></select></div>
             <div class="field full"><label for="customer-name">Customer name *</label><input class="control" id="customer-name" maxlength="140" required autocomplete="name"></div>
-            <div class="field"><label for="customer-phone">Phone</label><input class="control" id="customer-phone" type="tel" maxlength="30" inputmode="tel" autocomplete="tel" pattern="\+?[0-9 ()\-.]{10,30}"></div>
+            <div class="field"><label for="customer-phone">Phone *</label><input class="control" id="customer-phone" type="tel" maxlength="30" inputmode="tel" autocomplete="tel" pattern="\+?[0-9 ()\-.]{10,30}" required></div>
             <div class="field"><label for="alternate-phone">Alternate phone</label><input class="control" id="alternate-phone" type="tel" maxlength="30" inputmode="tel" pattern="\+?[0-9 ()\-.]{10,30}"></div>
             <div class="field full"><label for="customer-email">Email</label><input class="control" id="customer-email" type="email" maxlength="180" autocomplete="email"></div>
             <div class="field full"><label for="customer-address">Address</label><textarea class="control" id="customer-address" maxlength="600" autocomplete="street-address"></textarea></div>
@@ -120,6 +130,15 @@ async function boot() {
   const canManageCredentials = ['manager', 'owner'].includes(String(currentSession.role || '').toLowerCase());
   document.querySelectorAll('.credential-fields').forEach(element => element.classList.toggle('hidden', !canManageCredentials));
   await loadCustomers('');
+  const requestedCustomer = new URLSearchParams(location.search).get('customer');
+  if (requestedCustomer) {
+    try {
+      const data = await Api.request('/customers/' + encodeURIComponent(requestedCustomer));
+      await showCustomer(data.customer);
+    } catch (error) {
+      Toast.show(error.message);
+    }
+  }
 }
 
 async function loadCustomers(query) {
@@ -158,7 +177,7 @@ function renderCustomers(customers) {
   }
 }
 
-function showCustomer(customer) {
+async function showCustomer(customer) {
   selectedCustomer = customer;
   form.classList.add('hidden');
   detailEmpty.classList.add('hidden');
@@ -176,8 +195,41 @@ function showCustomer(customer) {
     detailItem('Notes', customer.notes)
   ].join('');
   document.querySelectorAll('.customer-row').forEach(row => row.classList.toggle('selected', row.querySelector('.customer-code')?.textContent === customer.customer_code));
+  document.getElementById('customer-record-summary').innerHTML = '<span class="document-status">Loading service history…</span>';
+  document.getElementById('customer-machine-list').innerHTML = '';
+  document.getElementById('customer-job-list').innerHTML = '';
+  await loadCustomerRecord(customer.id);
   loadCustomerDocuments(customer.id);
   loadCustomerCredentials(customer.id);
+}
+
+async function loadCustomerRecord(customerId) {
+  try {
+    const data = await Api.request('/customers/' + encodeURIComponent(customerId));
+    const record = data.customer;
+    selectedCustomer = record;
+    document.getElementById('customer-record-summary').innerHTML =
+      '<span><strong>' + OS.esc(String(record.total_visits || 0)) + '</strong><small>Total visits</small></span>' +
+      '<span><strong>' + OS.esc(String(record.completed_services || 0)) + '</strong><small>Completed</small></span>' +
+      '<span><strong>' + (record.loyal ? 'Loyal' : 'Regular') + '</strong><small>Customer status</small></span>';
+    document.getElementById('customer-machine-list').innerHTML = (record.machines || []).length
+      ? record.machines.map(machine =>
+          '<div class="customer-document-row"><span><strong>' + OS.esc(machine.display_name) + '</strong><small>' +
+          OS.esc(machine.serial_number || 'Serial not recorded') + '</small></span><b>' +
+          OS.esc(String(machine.repair_count || 0)) + ' visits</b></div>'
+        ).join('')
+      : '<span class="document-status">No machines recorded.</span>';
+    document.getElementById('customer-job-list').innerHTML = (record.jobs || []).length
+      ? record.jobs.map(job =>
+          '<a class="customer-document-row" href="work.html?id=' + encodeURIComponent(job.id) + '"><span><strong>' +
+          OS.esc(job.machine_name || job.work_order) + '</strong><small>' + OS.esc(job.reported_problem || 'Complaint not recorded') +
+          '</small></span><b>' + OS.esc(job.status_label) + '</b></a>'
+        ).join('')
+      : '<span class="document-status">No service visits recorded.</span>';
+  } catch (error) {
+    document.getElementById('customer-record-summary').innerHTML =
+      '<span class="document-status error">' + OS.esc(error.message) + '</span>';
+  }
 }
 
 function detailItem(label, value) {

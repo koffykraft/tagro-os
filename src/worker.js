@@ -640,33 +640,113 @@ async function listCustomers(env, url) {
   if (query) {
     const like = `%${query}%`;
     result = await env.DB.prepare(
-      `SELECT id, customer_code, customer_type, name, phone, alternate_phone, email, address, tax_id, notes, created_at, updated_at
-       FROM customers
+      `SELECT c.id, c.customer_code, c.customer_type, c.name, c.phone, c.alternate_phone,
+        c.email, c.address, c.tax_id, c.notes, c.created_at, c.updated_at,
+        (SELECT COUNT(*) FROM repair_jobs j WHERE j.customer_id = c.id) AS total_visits,
+        (SELECT COUNT(DISTINCT e.job_id) FROM job_events e
+          JOIN repair_jobs j ON j.id = e.job_id
+          WHERE j.customer_id = c.id
+            AND e.event_type IN ('repair_completed', 'machine_delivered', 'job_completed', 'job_returned')
+        ) AS completed_services
+       FROM customers c
        WHERE active = 1 AND record_kind = 'customer'
          AND (name LIKE ? COLLATE NOCASE OR phone LIKE ? OR alternate_phone LIKE ? OR customer_code LIKE ? COLLATE NOCASE)
-       ORDER BY updated_at DESC
+       ORDER BY c.updated_at DESC
        LIMIT ?`
     ).bind(like, like, like, like, limit).all();
   } else {
     result = await env.DB.prepare(
-      `SELECT id, customer_code, customer_type, name, phone, alternate_phone, email, address, tax_id, notes, created_at, updated_at
-       FROM customers
+      `SELECT c.id, c.customer_code, c.customer_type, c.name, c.phone, c.alternate_phone,
+        c.email, c.address, c.tax_id, c.notes, c.created_at, c.updated_at,
+        (SELECT COUNT(*) FROM repair_jobs j WHERE j.customer_id = c.id) AS total_visits,
+        (SELECT COUNT(DISTINCT e.job_id) FROM job_events e
+          JOIN repair_jobs j ON j.id = e.job_id
+          WHERE j.customer_id = c.id
+            AND e.event_type IN ('repair_completed', 'machine_delivered', 'job_completed', 'job_returned')
+        ) AS completed_services
+       FROM customers c
        WHERE active = 1 AND record_kind = 'customer'
-       ORDER BY updated_at DESC
+       ORDER BY c.updated_at DESC
        LIMIT ?`
     ).bind(limit).all();
   }
 
-  return json({ ok: true, customers: result.results || [] });
+  const customers = (result.results || []).map(customer => ({
+    ...customer,
+    total_visits: Number(customer.total_visits || 0),
+    completed_services: Number(customer.completed_services || 0),
+    loyal: Number(customer.completed_services || 0) >= 5
+  }));
+  return json({ ok: true, customers });
 }
 
 async function getCustomer(env, id) {
-  const customer = await env.DB.prepare(
-    `SELECT id, customer_code, customer_type, name, phone, alternate_phone, email, address, tax_id, notes, created_at, updated_at
-     FROM customers WHERE id = ? AND active = 1 AND record_kind = 'customer'`
-  ).bind(cleanText(id, 80)).first();
+  const customer = await getCustomerRecordData(env, cleanText(id, 80));
   if (!customer) return json({ ok: false, error: 'Customer not found.' }, 404);
   return json({ ok: true, customer });
+}
+
+async function getCustomerRecordData(env, customerId) {
+  const [customerResult, machinesResult, jobsResult, completedResult] = await env.DB.batch([
+    env.DB.prepare(
+      `SELECT id, customer_code, customer_type, name, phone, alternate_phone, email,
+        address, tax_id, notes, created_at, updated_at
+       FROM customers
+       WHERE id = ? AND active = 1 AND record_kind = 'customer'`
+    ).bind(customerId),
+    env.DB.prepare(
+      `SELECT cm.id, cm.customer_id, cm.machine_model_id, cm.display_name, cm.serial_number,
+        cm.notes, cm.provisional, cm.first_seen_at, cm.last_seen_at,
+        mm.model_name, mm.machine_type, mk.name AS make_name,
+        COUNT(j.id) AS repair_count, MAX(j.opened_at) AS last_repair_at
+       FROM customer_machines cm
+       LEFT JOIN machine_models mm ON mm.id = cm.machine_model_id
+       LEFT JOIN machine_makes mk ON mk.id = mm.make_id
+       LEFT JOIN repair_jobs j ON j.customer_machine_id = cm.id
+       WHERE cm.customer_id = ? AND cm.active = 1
+       GROUP BY cm.id
+       ORDER BY cm.last_seen_at DESC, cm.display_name`
+    ).bind(customerId),
+    env.DB.prepare(
+      `SELECT j.id, j.work_order, j.customer_machine_id, j.serial_number,
+        j.reported_problem, j.opened_at, j.updated_at,
+        cm.display_name AS machine_name,
+        (SELECT e.event_type FROM job_events e
+          WHERE e.job_id = j.id AND e.event_type <> 'note_added'
+          ORDER BY e.created_at DESC, e.id DESC LIMIT 1
+        ) AS latest_event_type
+       FROM repair_jobs j
+       LEFT JOIN customer_machines cm ON cm.id = j.customer_machine_id
+       WHERE j.customer_id = ?
+       ORDER BY j.opened_at DESC, j.id DESC`
+    ).bind(customerId),
+    env.DB.prepare(
+      `SELECT COUNT(DISTINCT e.job_id) AS completed_services
+       FROM job_events e
+       JOIN repair_jobs j ON j.id = e.job_id
+       WHERE j.customer_id = ?
+         AND e.event_type IN ('repair_completed', 'machine_delivered', 'job_completed', 'job_returned')`
+    ).bind(customerId)
+  ]);
+  const customer = customerResult.results?.[0];
+  if (!customer) return null;
+  const jobs = (jobsResult.results || []).map(job => {
+    const status = jobStatus(job.latest_event_type);
+    return {
+      ...job,
+      status,
+      status_label: JOB_STATUS_LABELS[status] || status
+    };
+  });
+  const completedServices = Number(completedResult.results?.[0]?.completed_services || 0);
+  return {
+    ...customer,
+    machines: machinesResult.results || [],
+    jobs,
+    total_visits: jobs.length,
+    completed_services: completedServices,
+    loyal: completedServices >= 5
+  };
 }
 
 async function listCustomerDocuments(env, id) {
@@ -936,9 +1016,17 @@ async function createCustomer(request, env, session) {
     branchId: session.branch_id,
     documentCount: uploadedDocuments.length
   }));
+  const customerRecord = await getCustomerRecordData(env, customer.id);
   return json({
     ok: true,
-    customer: publicCustomer(customer),
+    customer: customerRecord || {
+      ...publicCustomer(customer),
+      machines: [],
+      jobs: [],
+      total_visits: 0,
+      completed_services: 0,
+      loyal: false
+    },
     documents: uploadedDocuments.map(publicCustomerDocument)
   }, 201);
 }
@@ -1029,9 +1117,10 @@ async function updateCustomer(request, env, session, id) {
     customerCode: existing.customer_code,
     documentCount: uploadedDocuments.length
   }));
+  const customerRecord = await getCustomerRecordData(env, customerId);
   return json({
     ok: true,
-    customer: publicCustomer(customer),
+    customer: customerRecord || publicCustomer(customer),
     documents: uploadedDocuments.map(publicCustomerDocument)
   });
 }
@@ -1053,6 +1142,7 @@ function customerInput(body) {
 function validateCustomer(customer) {
   if (!['individual', 'business'].includes(customer.customerType)) return 'Customer type must be individual or business.';
   if (!customer.name || customer.name.length < 2) return 'Customer name must contain at least 2 characters.';
+  if (!customer.phone) return 'Customer phone is required.';
   if (customer.phone && !/^\+?\d{10,15}$/.test(customer.phone)) return 'Enter a valid phone number or leave it blank.';
   if (customer.alternatePhone && !/^\+?\d{10,15}$/.test(customer.alternatePhone)) return 'Enter a valid alternate phone number or leave it blank.';
   if (customer.phone && customer.alternatePhone && customer.phone === customer.alternatePhone) return 'Alternate phone must be different from the primary phone.';

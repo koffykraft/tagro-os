@@ -20,7 +20,7 @@ const document = {
   createElement: element,
   createTextNode: textContent => ({ textContent })
 };
-const context = vm.createContext({ document, globalThis: null });
+const context = vm.createContext({ document, window: { addEventListener() {} }, globalThis: null });
 context.globalThis = context;
 vm.runInContext(`${manifestSource}\n${shellSource}\nglobalThis.__manifest=TAGRO_MANIFEST;globalThis.__shell=AppShell;`, context);
 
