@@ -158,10 +158,10 @@ const JobWorkspace = {
       ['awaiting_approval', 'Approval'],
       ['repairing', 'Repair'],
       ['ready', 'Ready'],
-      ['delivered', 'Delivered']
+      ['returned', 'Returned']
     ];
     const status = String(this.order.status || 'received');
-    const rank = { received: 0, inspecting: 1, awaiting_approval: 2, approved: 2, repairing: 3, paused: 3, waiting_parts: 3, ready: 4, delivered: 5 };
+    const rank = { received: 0, inspecting: 1, awaiting_approval: 2, repairing: 3, paused: 3, waiting_parts: 3, ready: 4, returned: 5 };
     const current = rank[status] ?? 0;
     document.getElementById('progress-track').innerHTML = steps.map(([key, label], index) => {
       const className = index < current ? 'done' : index === current ? 'current' : '';
@@ -169,27 +169,16 @@ const JobWorkspace = {
     }).join('');
   },
 
-  diagnosticSpec() {
-    const text = `${this.order.complaint || ''} ${this.order.observation || ''}`.toLowerCase();
-    if (/(vibrat|noise|sound)/.test(text)) return { question: 'Which side?', hint: 'Choose where the symptom is strongest.', options: ['Clutch side', 'Flywheel side', 'Not yet clear'] };
-    if (/(won.?t start|not start|no start)/.test(text)) return { question: 'Does the engine turn?', hint: 'Check movement before fuel or ignition diagnosis.', options: ['Turns normally', 'Hard to turn', 'Locked'] };
-    if (/(no power|low power|power loss)/.test(text)) return { question: 'When is power lost?', hint: 'Choose the closest confirmed condition.', options: ['At full speed', 'Under load', 'At all speeds'] };
-    if (/(chain|clutch)/.test(text)) return { question: 'What does the chain do?', hint: 'Observe safely with the machine secured.', options: ['Moves at idle', 'Stops under load', 'Does not move'] };
-    if (/(fuel|leak)/.test(text)) return { question: 'Where is fuel visible?', hint: 'Record the first confirmed leak area.', options: ['Tank / cap', 'Hose / filter', 'Carburettor'] };
-    return { question: 'Where is the fault most noticeable?', hint: 'Record one confirmed fact before opening the machine.', options: ['Engine side', 'Tool / drive side', 'Not yet clear'] };
-  },
-
   statusActions() {
     const map = {
-      received: [['inspection_started', 'Start inspection', true], ['repair_started', 'Start repair', false]],
-      inspecting: [['repair_started', 'Start repair', true], ['repair_paused', 'Pause job', false]],
-      awaiting_approval: [],
-      approved: [['repair_started', 'Start repair', true]],
-      repairing: [['parts_requested', 'Waiting for parts', false], ['repair_completed', 'Repair complete', true]],
-      paused: [['repair_resumed', 'Resume repair', true], ['parts_requested', 'Waiting for parts', false]],
-      waiting_parts: [['parts_received', 'Parts received', true]],
-      ready: [['customer_notified', 'Customer notified', false], ['machine_delivered', 'Machine delivered', true]],
-      delivered: [],
+      received: [['job_taken', 'Take this job', true]],
+      inspecting: [['repair_started', 'Start repair', true], ['parts_requested', 'Waiting for parts', false], ['job_paused', 'Pause job', false]],
+      awaiting_approval: [['estimate_approved', 'Approval received', true], ['job_paused', 'Pause job', false]],
+      repairing: [['parts_requested', 'Waiting for parts', false], ['job_paused', 'Pause job', false], ['job_completed', 'Work complete', true]],
+      paused: [['job_resumed', 'Resume job', true]],
+      waiting_parts: [['job_resumed', 'Parts arrived — resume', true]],
+      ready: [['job_returned', 'Return machine', true]],
+      returned: [],
       cancelled: []
     };
     return map[this.order.status] || [];
@@ -197,50 +186,99 @@ const JobWorkspace = {
 
   renderNextAction() {
     const status = String(this.order.status || 'received');
-    const spec = this.diagnosticSpec();
     const actions = this.statusActions();
-    const terminal = ['delivered', 'cancelled'].includes(status);
-    const approval = status === 'awaiting_approval';
-    document.getElementById('diagnostic-step').textContent = terminal ? 'Closed' : approval ? 'Estimate required' : 'Guided check';
+    const terminal = ['returned', 'cancelled'].includes(status);
+    const latestPause = [...(this.order.events || [])].reverse().find(event =>
+      ['job_paused', 'repair_paused'].includes(event.event_type)
+    );
+    const pauseContext = latestPause?.data?.pauseReason || latestPause?.data?.reason || latestPause?.data?.note || '';
+    const heading = {
+      received: 'Ready for a technician',
+      inspecting: 'Record what you observe',
+      awaiting_approval: 'Waiting for customer approval',
+      repairing: 'Continue the repair',
+      paused: 'Job paused',
+      waiting_parts: 'Waiting for parts',
+      ready: 'Ready for collection'
+    }[status] || 'Next useful action';
+    const guidance = {
+      received: 'Take the job to put it on your bench. The customer complaint is already recorded.',
+      inspecting: 'Write one clear fact in your own words. No diagnostic choice is required.',
+      awaiting_approval: 'Record approval when the customer confirms the estimate.',
+      repairing: 'Parts and work notes autosave while you continue.',
+      paused: pauseContext ? `Paused because: ${pauseContext}` : 'Resume when the blocking reason is resolved.',
+      waiting_parts: 'Resume when the required parts have arrived.',
+      ready: 'Return the machine only after handover to the customer.'
+    }[status] || '';
+    document.getElementById('diagnostic-step').textContent = terminal ? 'Closed' : 'Next';
     document.getElementById('next-action-content').innerHTML = terminal
-      ? `<h3>${status === 'delivered' ? 'Job delivered' : 'Job closed'}</h3><p>The record remains available for reference.</p>`
-      : `<h3>${ServiceUI.esc(spec.question)}</h3>
-         <p>${ServiceUI.esc(spec.hint)} This starter guidance is rule-based; AI diagnosis is not connected yet.</p>
-         <div class="diagnostic-options">${spec.options.map(option => `<button class="diagnostic-choice" type="button" data-finding="${ServiceUI.esc(option)}">${ServiceUI.esc(option)}<span>Record this finding</span></button>`).join('')}</div>
+      ? `<h3>${status === 'returned' ? 'Machine returned' : 'Job closed'}</h3><p>The full record remains available for reference.</p>`
+      : `<h3>${ServiceUI.esc(heading)}</h3>
+         <p>${ServiceUI.esc(guidance)}</p>
+         ${status === 'inspecting' ? `
+           <label class="bench-note-field" for="bench-note-input">Bench note
+             <textarea id="bench-note-input" placeholder="What do you see, hear or feel?"></textarea>
+           </label>
+           <button class="workspace-primary bench-note-button" type="button" data-record-observation>Record observation</button>
+         ` : ''}
+         ${status === 'inspecting' && this.estimate ? '<button class="outline-button approval-button" type="button" data-job-event="estimate_created">Request approval</button>' : ''}
+         ${actions.some(([eventType]) => eventType === 'job_paused') ? `
+           <label class="pause-reason-field" id="pause-reason-field" hidden>Pause reason
+             <select id="pause-reason">
+               <option value="">Choose reason</option>
+               <option>Waiting Customer</option>
+               <option>Waiting Parts</option>
+               <option>Outside Work</option>
+               <option>Priority Changed</option>
+               <option>End of Day</option>
+               <option>Other</option>
+             </select>
+           </label>
+         ` : ''}
          <div class="next-action-buttons">
-           ${approval ? '<button class="workspace-primary" type="button" data-open-estimate>Prepare estimate</button>' : ''}
            ${actions.map(([eventType, label, primary]) => `<button class="${primary ? 'workspace-primary' : 'outline-button'}" type="button" data-job-event="${eventType}">${ServiceUI.esc(label)}</button>`).join('')}
-           <button class="outline-button" type="button" data-open-details>Add note</button>
+           ${status === 'inspecting' ? '<button class="outline-button" type="button" data-open-estimate>Prepare estimate</button>' : ''}
          </div>
          <p class="next-action-message" id="next-action-message"></p>`;
-    document.querySelectorAll('[data-finding]').forEach(button => button.addEventListener('click', () => this.recordFinding(spec.question, button.dataset.finding)));
     document.querySelectorAll('[data-job-event]').forEach(button => button.addEventListener('click', () => this.postEvent(button.dataset.jobEvent, button)));
-    document.querySelector('[data-open-details]')?.addEventListener('click', () => this.openDialog('job-details-dialog'));
+    document.querySelector('[data-record-observation]')?.addEventListener('click', event => {
+      const note = document.getElementById('bench-note-input')?.value.trim();
+      this.postEvent('inspection_observed', event.currentTarget, { note });
+    });
     document.querySelector('[data-open-estimate]')?.addEventListener('click', () => this.createEstimate());
   },
 
-  recordFinding(question, answer) {
-    const observation = document.getElementById('observation');
-    const line = `Guided check: ${question} — ${answer}`;
-    if (!observation.value.includes(line)) observation.value = [observation.value.trim(), line].filter(Boolean).join('\n');
-    WorkOrderForm.changed();
-    document.getElementById('next-action-message').textContent = 'Finding recorded and queued for autosave.';
-    this.showToast('Finding added to workshop observation.');
-  },
-
-  async postEvent(eventType, button) {
-    if (eventType === 'machine_delivered' && !confirm('Mark this machine as delivered?')) return;
+  async postEvent(eventType, button, extra = {}) {
+    if (eventType === 'job_returned' && !confirm('Confirm that the machine has been returned to the customer.')) return;
     const message = document.getElementById('next-action-message');
+    const pauseReason = eventType === 'job_paused' ? document.getElementById('pause-reason')?.value : null;
+    if (eventType === 'job_paused' && !pauseReason) {
+      document.getElementById('pause-reason-field').hidden = false;
+      message.textContent = 'Choose why the job is paused.';
+      message.className = 'next-action-message error';
+      document.getElementById('pause-reason')?.focus();
+      return;
+    }
+    if (eventType === 'inspection_observed' && !extra.note) {
+      message.textContent = 'Write a bench note first.';
+      message.className = 'next-action-message error';
+      document.getElementById('bench-note-input')?.focus();
+      return;
+    }
     button.disabled = true;
-    message.textContent = 'Updating job…';
+    message.textContent = 'Recording update…';
     message.className = 'next-action-message';
     try {
       await Api.request(`/repair-jobs/${encodeURIComponent(this.id)}/events`, {
         method: 'POST',
-        body: JSON.stringify({ eventType, note: 'Updated from Service Workspace' })
+        body: JSON.stringify({
+          eventType,
+          note: extra.note || (eventType === 'job_taken' ? 'Job taken from Workbench' : null),
+          pauseReason
+        })
       });
       await Promise.all([this.refreshOrder(), this.loadQueue()]);
-      this.showToast('Job status updated.');
+      this.showToast(eventType === 'inspection_observed' ? 'Bench observation recorded.' : 'Job updated.');
     } catch (error) {
       message.textContent = error.message;
       message.className = 'next-action-message error';
@@ -255,7 +293,7 @@ const JobWorkspace = {
         Api.request('/work-orders?limit=160'),
         Api.request('/work-orders?mine=1&limit=160')
       ]);
-      const active = order => !['delivered', 'cancelled'].includes(String(order.status || '').toLowerCase());
+      const active = order => !['returned', 'cancelled'].includes(String(order.status || '').toLowerCase());
       this.allOrders = (allData.workOrders || []).filter(active);
       const mine = (mineData.workOrders || []).filter(active);
       this.queueOrders = mine.some(order => order.id === this.id) ? mine : this.allOrders;
@@ -316,6 +354,7 @@ const JobWorkspace = {
       const data = await Api.request(`/repair-jobs/${encodeURIComponent(this.id)}/estimate`);
       this.estimate = data.estimate || null;
       this.renderEstimateState();
+      this.renderNextAction();
     } catch (error) {
       document.getElementById('estimate-state').textContent = error.message;
     }
@@ -378,6 +417,7 @@ const JobWorkspace = {
       });
       this.estimate = data.estimate;
       this.renderEstimateState();
+      this.renderNextAction();
       this.showToast(`Estimate ${data.estimate.estimate_number} saved.`);
     } catch (error) {
       this.showToast(error.message);
@@ -618,7 +658,7 @@ const JobWorkspace = {
   statusClass(status) {
     if (['waiting_parts', 'awaiting_approval', 'paused'].includes(status)) return 'waiting';
     if (status === 'ready') return 'ready';
-    if (['delivered', 'cancelled'].includes(status)) return 'closed';
+    if (['returned', 'cancelled'].includes(status)) return 'closed';
     return '';
   },
 

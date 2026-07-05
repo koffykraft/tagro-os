@@ -26,16 +26,18 @@ const workspaceIds = [...referencedIds].filter(id => (
     'complaint', 'observation', 'work-done', 'billing-subtotal', 'billing-tax', 'billing-total',
     'billing-note', 'part-list', 'accept-machine', 'known-machines', 'intake-photo-panel',
     'work-intake-photos'].includes(id)
-)).filter(id => id !== 'next-action-message');
+)).filter(id => !['next-action-message', 'bench-note-input', 'pause-reason', 'pause-reason-field'].includes(id));
 
 check(workspaceIds.every(id => htmlIds.has(id)), `workspace DOM contract (${workspaceIds.length} IDs)`);
 check(html.includes('work-space.css') && html.includes('work-space.js'), 'workspace assets linked');
-check(sw.includes("'/work-space.css'") && sw.includes("'/work-space.js'") && sw.includes('tagro-white-v22'), 'offline shell versioned');
+check(sw.includes("'/work-space.css'") && sw.includes("'/work-space.js'") && sw.includes('tagro-white-v23'), 'offline shell versioned');
 check(js.includes("Api.request('/work-orders?limit=160')") && js.includes("Api.request('/work-orders?mine=1&limit=160')"), 'live queue data used');
 check(js.includes('/knowledge/parts?query=') && js.includes('addCatalogPart'), 'parts:master-to-job path');
 check(js.includes('/estimate') && js.includes('Create estimate'), 'estimate conversion path');
 check(js.includes('/events') && js.includes('statusActions'), 'real workflow-event path');
-check(js.includes('AI diagnosis is not connected yet'), 'AI capability represented honestly');
+check(js.includes("'job_taken', 'Take this job'") && js.includes('data-record-observation') &&
+  js.includes("'inspection_observed'"), 'take-job and free-text bench observation flow');
+check(!js.includes('diagnosticSpec()') && !js.includes('data-finding'), 'guided diagnosis is not an entry gate');
 check(css.includes('@media(max-width:760px)') && html.includes('mobile-bottom-nav'), 'mobile workspace layout');
 check(!/Rubber Biju|Jose Sawmill|Thomas Thumpassery|94470000/i.test(`${html}\n${js}`), 'no retired sample customer data');
 check(workOrderForm.includes("document.dispatchEvent(new CustomEvent('tagro:parts-updated'))"), 'basket receives part updates');

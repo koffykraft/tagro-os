@@ -169,7 +169,7 @@ async function loadDestinations() {
   const select = document.getElementById('destination-select');
   try {
     const data = await Api.request('/work-orders?limit=100');
-    destinationOrders = (data.workOrders || []).filter(order => !['delivered', 'cancelled'].includes(String(order.status || '').toLowerCase()));
+    destinationOrders = (data.workOrders || []).filter(order => !['returned', 'cancelled'].includes(String(order.status || '').toLowerCase()));
   } catch { destinationOrders = []; }
   const jobs = destinationOrders.map(order =>
     '<option value="job:' + OS.esc(order.id) + '">' + OS.esc(order.workOrder + ' · ' + (order.machineDescription || 'Machine')) + '</option>'

@@ -98,7 +98,7 @@ const MySpace = {
       ]);
       this.allOrders = Array.isArray(allData.workOrders) ? allData.workOrders : [];
       this.mineOrders = Array.isArray(mineData.workOrders) ? mineData.workOrders : [];
-      const active = order => !['delivered', 'cancelled'].includes(String(order.status || '').toLowerCase());
+      const active = order => !['returned', 'cancelled'].includes(String(order.status || '').toLowerCase());
       const activeAll = this.allOrders.filter(active);
       this.activeMine = this.mineOrders.filter(active);
       document.getElementById('bench-count').textContent = String(this.activeMine.length);

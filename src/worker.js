@@ -2624,17 +2624,24 @@ function publicIntakePhoto(photo, draftId) {
 const JOB_EVENT_STATUS = {
   job_received: 'received',
   machine_received: 'received',
+  job_taken: 'inspecting',
+  inspection_observed: 'inspecting',
   inspection_started: 'inspecting',
+  estimate_created: 'awaiting_approval',
   inspection_completed: 'awaiting_approval',
-  estimate_approved: 'approved',
+  estimate_approved: 'repairing',
   repair_started: 'repairing',
+  job_paused: 'paused',
   repair_paused: 'paused',
+  job_resumed: 'repairing',
   repair_resumed: 'repairing',
   parts_requested: 'waiting_parts',
   parts_received: 'repairing',
+  job_completed: 'ready',
   repair_completed: 'ready',
   customer_notified: 'ready',
-  machine_delivered: 'delivered',
+  job_returned: 'returned',
+  machine_delivered: 'returned',
   job_cancelled: 'cancelled'
 };
 
@@ -2642,40 +2649,52 @@ const JOB_STATUS_LABELS = {
   received: 'Received',
   inspecting: 'Inspecting',
   awaiting_approval: 'Awaiting Approval',
-  approved: 'Approved',
   repairing: 'Repairing',
   paused: 'Paused',
   waiting_parts: 'Waiting for Parts',
-  ready: 'Ready for Delivery',
-  delivered: 'Delivered',
+  ready: 'Ready for Collection',
+  returned: 'Returned',
   cancelled: 'Cancelled'
 };
 
 const JOB_STATUS_EVENTS = {
   received: ['job_received', 'machine_received'],
-  inspecting: ['inspection_started'],
-  awaiting_approval: ['inspection_completed'],
-  approved: ['estimate_approved'],
-  repairing: ['repair_started', 'repair_resumed', 'parts_received'],
-  paused: ['repair_paused'],
+  inspecting: ['job_taken', 'inspection_observed', 'inspection_started'],
+  awaiting_approval: ['estimate_created', 'inspection_completed'],
+  repairing: ['estimate_approved', 'repair_started', 'job_resumed', 'repair_resumed', 'parts_received'],
+  paused: ['job_paused', 'repair_paused'],
   waiting_parts: ['parts_requested'],
-  ready: ['repair_completed', 'customer_notified'],
-  delivered: ['machine_delivered'],
+  ready: ['job_completed', 'repair_completed', 'customer_notified'],
+  returned: ['job_returned', 'machine_delivered'],
   cancelled: ['job_cancelled']
 };
 
 const JOB_TRANSITIONS = {
-  received: new Set(['inspection_started', 'repair_started', 'job_cancelled']),
-  inspecting: new Set(['inspection_completed', 'repair_started', 'repair_paused', 'job_cancelled']),
-  awaiting_approval: new Set(['estimate_approved', 'job_cancelled']),
-  approved: new Set(['repair_started', 'job_cancelled']),
-  repairing: new Set(['repair_paused', 'parts_requested', 'repair_completed', 'job_cancelled']),
-  paused: new Set(['repair_resumed', 'parts_requested', 'job_cancelled']),
-  waiting_parts: new Set(['parts_received', 'job_cancelled']),
-  ready: new Set(['customer_notified', 'machine_delivered']),
-  delivered: new Set(),
+  received: new Set(['job_taken', 'inspection_started', 'repair_started', 'job_cancelled']),
+  inspecting: new Set([
+    'inspection_observed', 'estimate_created', 'inspection_completed',
+    'repair_started', 'job_paused', 'repair_paused', 'parts_requested', 'job_cancelled'
+  ]),
+  awaiting_approval: new Set(['estimate_approved', 'job_paused', 'repair_paused', 'job_cancelled']),
+  repairing: new Set([
+    'job_paused', 'repair_paused', 'parts_requested',
+    'job_completed', 'repair_completed', 'job_cancelled'
+  ]),
+  paused: new Set(['job_resumed', 'repair_resumed', 'parts_requested', 'job_cancelled']),
+  waiting_parts: new Set(['job_resumed', 'repair_resumed', 'parts_received', 'job_cancelled']),
+  ready: new Set(['customer_notified', 'job_returned', 'machine_delivered']),
+  returned: new Set(),
   cancelled: new Set()
 };
+
+const JOB_PAUSE_REASONS = new Set([
+  'Waiting Customer',
+  'Waiting Parts',
+  'Outside Work',
+  'Priority Changed',
+  'End of Day',
+  'Other'
+]);
 
 function workOrderInput(body) {
   const customer = body.customer && typeof body.customer === 'object' ? body.customer : {};
@@ -3334,7 +3353,8 @@ async function listRepairJobs(env, session, url) {
        ORDER BY e.created_at DESC, e.id DESC LIMIT 1
      )
      LEFT JOIN job_events intake ON intake.id = (
-       SELECT e.id FROM job_events e WHERE e.job_id = j.id AND e.event_type = 'machine_received'
+       SELECT e.id FROM job_events e
+       WHERE e.job_id = j.id AND e.event_type IN ('job_received', 'machine_received')
        ORDER BY e.created_at, e.id LIMIT 1
      )
      ${where}
@@ -3366,7 +3386,8 @@ async function getRepairJob(env, session, id) {
        ORDER BY e.created_at DESC, e.id DESC LIMIT 1
      )
      LEFT JOIN job_events intake ON intake.id = (
-       SELECT e.id FROM job_events e WHERE e.job_id = j.id AND e.event_type = 'machine_received'
+       SELECT e.id FROM job_events e
+       WHERE e.job_id = j.id AND e.event_type IN ('job_received', 'machine_received')
        ORDER BY e.created_at, e.id LIMIT 1
      )
      WHERE j.id = ?`
@@ -3501,26 +3522,47 @@ async function addRepairJobEvent(request, env, session, id) {
   const body = await readJson(request);
   const eventType = cleanText(body.eventType, 50).toLowerCase();
   const note = cleanText(body.note, 1500) || null;
-  const job = await env.DB.prepare('SELECT id, branch_id FROM repair_jobs WHERE id = ?').bind(jobId).first();
+  const job = await env.DB.prepare(
+    `SELECT j.id, j.branch_id, d.assigned_to
+     FROM repair_jobs j
+     LEFT JOIN work_order_details d ON d.job_id = j.id
+     WHERE j.id = ?`
+  ).bind(jobId).first();
   if (!job) return json({ ok: false, error: 'Repair job not found.' }, 404);
   if (!hasRole(session, 'owner') && job.branch_id !== session.branch_id) {
     return json({ ok: false, error: 'This repair job belongs to another branch.' }, 403);
   }
   const latest = await env.DB.prepare(
-    "SELECT event_type FROM job_events WHERE job_id = ? AND event_type <> 'note_added' ORDER BY created_at DESC, id DESC LIMIT 1"
+    `SELECT event_type, event_data_json FROM job_events
+     WHERE job_id = ? AND event_type <> 'note_added'
+     ORDER BY created_at DESC, id DESC LIMIT 1`
   ).bind(jobId).first();
   const currentStatus = jobStatus(latest?.event_type);
   if (eventType !== 'note_added' && !JOB_TRANSITIONS[currentStatus]?.has(eventType)) {
     return json({ ok: false, error: `That action is not available while this job is ${JOB_STATUS_LABELS[currentStatus] || currentStatus}.` }, 409);
   }
-  if (eventType === 'note_added' && !note) return json({ ok: false, error: 'Enter a note first.' }, 400);
+  if (['note_added', 'inspection_observed'].includes(eventType) && !note) {
+    return json({ ok: false, error: 'Enter a workshop note first.' }, 400);
+  }
+  if (eventType === 'job_taken' && job.assigned_to && job.assigned_to !== session.id && !hasRole(session, 'manager', 'owner')) {
+    return json({ ok: false, error: 'This job is already assigned to another technician.' }, 409);
+  }
+  const pauseReason = cleanText(body.pauseReason, 40);
+  if (eventType === 'job_paused' && !JOB_PAUSE_REASONS.has(pauseReason)) {
+    return json({ ok: false, error: 'Select why this job is paused.' }, 400);
+  }
+  const latestData = parseJsonObject(latest?.event_data_json);
   const eventData = {
     note,
+    pauseReason: eventType === 'job_paused' ? pauseReason : null,
+    resumedFromReason: eventType === 'job_resumed'
+      ? (latestData.pauseReason || latestData.reason || latestData.note || null)
+      : null,
     estimateAmount: optionalNumber(body.estimateAmount),
     serviceTypeIds: cleanStringList(body.serviceTypeIds, 30, 80)
   };
   let formalEstimate = null;
-  if (eventType === 'inspection_completed' || eventType === 'estimate_approved') {
+  if (['estimate_created', 'inspection_completed', 'estimate_approved'].includes(eventType)) {
     formalEstimate = await env.DB.prepare(
       'SELECT id, estimate_number, grand_total FROM job_estimates WHERE job_id = ?'
     ).bind(jobId).first();
@@ -3543,13 +3585,42 @@ async function addRepairJobEvent(request, env, session, id) {
     ).bind(makeId('event'), jobId, eventType, JSON.stringify(eventData), session.id, now, now),
     env.DB.prepare('UPDATE repair_jobs SET updated_at = ? WHERE id = ?').bind(now, jobId)
   ];
+  if (eventType === 'job_taken') {
+    statements.push(
+      env.DB.prepare(
+        `INSERT INTO work_order_details
+          (job_id, assigned_to, created_at, updated_at, updated_by)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(job_id) DO UPDATE SET
+           assigned_to = excluded.assigned_to,
+           updated_at = excluded.updated_at,
+           updated_by = excluded.updated_by`
+      ).bind(jobId, session.id, now, now, session.id)
+    );
+  }
+  if (eventType === 'inspection_observed') {
+    statements.push(
+      env.DB.prepare(
+        `INSERT INTO work_order_details
+          (job_id, observation, created_at, updated_at, updated_by)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(job_id) DO UPDATE SET
+           observation = CASE
+             WHEN TRIM(COALESCE(work_order_details.observation, '')) = '' THEN excluded.observation
+             ELSE work_order_details.observation || CHAR(10) || excluded.observation
+           END,
+           updated_at = excluded.updated_at,
+           updated_by = excluded.updated_by`
+      ).bind(jobId, note, now, now, session.id)
+    );
+  }
   if (eventType === 'estimate_approved') {
     statements.push(
       env.DB.prepare(
         "UPDATE job_estimates SET status = 'approved', updated_by = ?, updated_at = ? WHERE job_id = ?"
       ).bind(session.id, now, jobId)
     );
-  } else if (eventType === 'inspection_completed') {
+  } else if (eventType === 'estimate_created' || eventType === 'inspection_completed') {
     statements.push(
       env.DB.prepare(
         "UPDATE job_estimates SET status = 'sent', updated_by = ?, updated_at = ? WHERE job_id = ?"
@@ -3853,7 +3924,7 @@ function serviceItemStatements(env, recordId, items) {
 async function saveServiceRecord(request, env, session, id) {
   const context = await getRepairContext(env, session, id);
   if (context.error) return context.error;
-  if (['delivered', 'cancelled'].includes(context.status)) {
+  if (['returned', 'cancelled'].includes(context.status)) {
     return json({ ok: false, error: 'This repair case is closed.' }, 409);
   }
   const body = await readJson(request);
@@ -4447,7 +4518,7 @@ async function reportOverview(env, session, url) {
      FROM catalog_items WHERE active = 1 AND review_required = 1
      ORDER BY updated_at DESC LIMIT 8`
   ).all();
-  const openStatuses = ['received', 'inspecting', 'awaiting_approval', 'approved', 'repairing', 'paused', 'waiting_parts'];
+  const openStatuses = ['received', 'inspecting', 'awaiting_approval', 'repairing', 'paused', 'waiting_parts'];
   const openJobs = openStatuses.reduce((total, status) => total + Number(statuses[status] || 0), 0);
   return json({
     ok: true,
@@ -4462,7 +4533,7 @@ async function reportOverview(env, session, url) {
       jobsOpened: Number(opened?.total || 0),
       openJobs,
       readyForDelivery: Number(statuses.ready || 0),
-      delivered: Number(statuses.delivered || 0),
+      returned: Number(statuses.returned || 0),
       customersCreated: Number(customers?.total || 0),
       activeStaff: Number(activeStaff?.total || 0),
       reviewItems: Number(review?.total || 0)

@@ -10,6 +10,7 @@
     "verify:isolation": "node scripts/verify-app-isolation.mjs",
     "verify:customers": "node scripts/verify-customer-records.mjs",
     "verify:machines": "node scripts/verify-machine-records.mjs",
+    "verify:lifecycle": "node scripts/verify-service-lifecycle.mjs",
     "verify:workspace": "node scripts/verify-workspace.mjs",
     "verify:parts": "node scripts/verify-parts-workflow.mjs",
     "deploy": "wrangler deploy --env=\"\" --strict",
