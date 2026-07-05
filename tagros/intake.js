@@ -14,6 +14,7 @@ const IntakeApp = {
   async boot() {
     this.session = await ServiceUI.session();
     if (!this.session) return;
+    AppShell.renderAll(this.session);
     ServiceUI.header(this.session);
     this.complaintKey = `tagro_intake_complaints_${this.session.id || 'staff'}`;
     this.complaints = this.loadComplaints();

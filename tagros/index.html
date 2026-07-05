@@ -17,14 +17,7 @@
         <img src="tagro-logo.png" alt="TAGRO">
         <span>OS</span>
       </a>
-      <nav class="space-nav">
-        <a class="active" href="index.html" aria-current="page"><span class="nav-icon">⌂</span>My Space</a>
-        <a href="bench.html"><span class="nav-icon">⌑</span>My Bench</a>
-        <a href="app-jobs.html"><span class="nav-icon">☷</span>Jobs</a>
-        <a href="receive.html"><span class="nav-icon">＋</span>Receive</a>
-        <a href="app-catalog.html"><span class="nav-icon">◇</span>Parts</a>
-        <a href="app-catalog.html"><span class="nav-icon">?</span>Assist</a>
-      </nav>
+      <nav class="space-nav" data-app-navigation="desktop" data-active-app="home"></nav>
     </aside>
 
     <div class="space-workspace">
@@ -131,12 +124,8 @@
     </div>
   </div>
 
-  <nav class="mobile-bottom-nav" aria-label="Mobile navigation">
-    <a class="active" href="index.html" aria-current="page"><span>⌂</span>Home</a>
-    <a href="bench.html"><span>⌑</span>Bench</a>
-    <a href="app-jobs.html"><span>☷</span>Jobs</a>
-    <a href="app-catalog.html"><span>◇</span>Parts</a>
-    <button id="mobile-more" type="button"><span>•••</span>More</button>
+  <nav class="mobile-bottom-nav" data-app-navigation="mobile-core" data-active-app="home" aria-label="Mobile navigation">
+    <button id="mobile-more" data-app-nav-static type="button"><span>•••</span>More</button>
   </nav>
 
   <dialog class="personalize-dialog" id="personalize-dialog">
@@ -179,8 +168,7 @@
         <img src="tagro-logo.png" alt="TAGRO">
         <button type="button" aria-label="Close navigation">×</button>
       </div>
-      <a href="receive.html">Receive machine</a>
-      <a href="app-purchase-orders.html">Purchase orders</a>
+      <div class="drawer-app-links" data-app-navigation="drawer" data-active-app="home"></div>
       <a href="manage.html" id="manage-link">Manage</a>
       <button id="sign-out" type="button">Sign out</button>
     </div>
@@ -189,6 +177,7 @@
   <div id="space-toast" class="space-toast" role="status" aria-live="polite"></div>
   <script src="os-manifest.js"></script>
   <script src="os-core.js"></script>
+  <script src="app-shell.js"></script>
   <script src="service-core.js"></script>
   <script src="my-space.js"></script>
 </body>

@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#ffffff"><meta name="apple-mobile-web-app-capable" content="yes">
 <title>TAGRO OS</title><link rel="manifest" href="manifest.json"><link rel="stylesheet" href="os-shell.css">
-<script src="os-manifest.js"></script><script src="os-icons.js"></script><script src="os-core.js"></script>
+<script src="os-manifest.js"></script><script src="os-icons.js"></script><script src="os-core.js"></script><script src="app-shell.js"></script>
 </head>
 <body>
 <div class="top-accent"></div>
@@ -40,7 +40,7 @@ async function boot(){
   renderApps(session);
 }
 function renderApps(session){
-  const apps=TAGRO_MANIFEST.apps.filter(app=>TAGRO_MANIFEST.canAccess(app,session));
+  const apps=AppShell.visibleApps(session).filter(app=>app.launcher!==false);
   document.getElementById('app-count').textContent=apps.length+' available';
   const grid=document.getElementById('app-grid'); grid.innerHTML='';
   for(const app of apps){

@@ -19,6 +19,7 @@ const MySpace = {
   async boot() {
     this.session = await ServiceUI.session();
     if (!this.session) return;
+    AppShell.renderAll(this.session);
     this.preferenceKey = `tagro_my_space_preferences_${this.session.id || 'staff'}`;
     this.parkedKey = `tagro_my_space_parked_${this.session.id || 'staff'}`;
     this.preferences = this.loadPreferences();

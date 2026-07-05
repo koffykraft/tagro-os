@@ -12,13 +12,7 @@
 </head>
 <body class="intake-page">
   <header class="service-header"></header>
-  <nav class="intake-top-nav" aria-label="Workshop navigation">
-    <a href="index.html">My Space</a>
-    <a href="bench.html">My Bench</a>
-    <a href="app-jobs.html">Jobs</a>
-    <a class="active" href="receive.html" aria-current="page">Receive</a>
-    <a href="app-catalog.html">Parts</a>
-  </nav>
+  <nav class="intake-top-nav" data-app-navigation="desktop" data-active-app="receive" aria-label="Workshop navigation"></nav>
 
   <main class="service-main intake-main">
     <div class="intake-heading">
@@ -184,17 +178,12 @@
     </div>
   </dialog>
 
-  <nav class="intake-mobile-nav" aria-label="Mobile navigation">
-    <a href="index.html"><span>⌂</span>Home</a>
-    <a href="bench.html"><span>⌑</span>Bench</a>
-    <a href="app-jobs.html"><span>☷</span>Jobs</a>
-    <a href="app-catalog.html"><span>◇</span>Parts</a>
-    <a class="active" href="receive.html"><span>＋</span>Receive</a>
-  </nav>
+  <nav class="intake-mobile-nav" data-app-navigation="mobile-receive" data-active-app="receive" aria-label="Mobile navigation"></nav>
 
   <div class="space-toast" id="intake-toast" role="status" aria-live="polite"></div>
   <script src="os-manifest.js"></script>
   <script src="os-core.js"></script>
+  <script src="app-shell.js"></script>
   <script src="service-core.js"></script>
   <script src="intake.js"></script>
 </body>

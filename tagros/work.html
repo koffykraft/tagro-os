@@ -17,14 +17,7 @@
       <a class="space-brand" href="index.html" aria-label="TAGRO My Space">
         <img src="tagro-logo.png" alt="TAGRO"><span>OS</span>
       </a>
-      <nav class="space-nav">
-        <a href="index.html"><span class="nav-icon">⌂</span>My Space</a>
-        <a class="active" href="bench.html" aria-current="page"><span class="nav-icon">⌑</span>My Bench</a>
-        <a href="app-jobs.html"><span class="nav-icon">☷</span>Jobs</a>
-        <a href="receive.html"><span class="nav-icon">＋</span>Receive</a>
-        <a href="app-catalog.html"><span class="nav-icon">◇</span>Parts</a>
-        <a href="app-catalog.html"><span class="nav-icon">?</span>Assist</a>
-      </nav>
+      <nav class="space-nav" data-app-navigation="desktop" data-active-app="bench"></nav>
     </aside>
 
     <div class="space-workspace">
@@ -205,12 +198,8 @@
     </div>
   </div>
 
-  <nav class="mobile-bottom-nav" aria-label="Mobile navigation">
-    <a href="index.html"><span>⌂</span>Home</a>
-    <a class="active" href="bench.html" aria-current="page"><span>⌑</span>Bench</a>
-    <a href="app-jobs.html"><span>☷</span>Jobs</a>
-    <a href="app-catalog.html"><span>◇</span>Parts</a>
-    <button id="mobile-more" type="button"><span>•••</span>More</button>
+  <nav class="mobile-bottom-nav" data-app-navigation="mobile-core" data-active-app="bench" aria-label="Mobile navigation">
+    <button id="mobile-more" data-app-nav-static type="button"><span>•••</span>More</button>
   </nav>
 
   <dialog class="workspace-dialog" id="job-details-dialog">
@@ -333,10 +322,7 @@
     <button class="drawer-backdrop" type="button" aria-label="Close navigation"></button>
     <div class="drawer-panel">
       <div class="drawer-heading"><img src="tagro-logo.png" alt="TAGRO"><button type="button" aria-label="Close navigation">×</button></div>
-      <a href="index.html">My Space</a>
-      <a href="receive.html">Receive machine</a>
-      <a href="app-jobs.html">All jobs</a>
-      <a href="app-catalog.html">Parts catalogue</a>
+      <div class="drawer-app-links" data-app-navigation="drawer" data-active-app="bench"></div>
       <button id="sign-out" type="button">Sign out</button>
     </div>
   </div>
@@ -344,11 +330,13 @@
   <div id="space-toast" class="space-toast" role="status" aria-live="polite"></div>
   <script src="os-manifest.js"></script>
   <script src="os-core.js"></script>
+  <script src="app-shell.js"></script>
   <script src="service-core.js"></script>
   <script src="work-space.js"></script>
   <script>
   (async()=>{
     const session=await ServiceUI.session();if(!session)return;
+    AppShell.renderAll(session);
     const id=new URLSearchParams(location.search).get('id');
     if(!id){location.replace('app-jobs.html');return}
     try{
