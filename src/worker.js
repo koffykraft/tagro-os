@@ -1941,11 +1941,11 @@ async function listCatalogItems(env, url) {
     tagro_name: item.item_name,
     stihl_name: item.item_name
   }));
-  if (reviewOnly || type === 'service' || !env.CATALOG_KV || localItems.length >= limit) {
+  if (reviewOnly || type === 'service' || !env.TAGRO_DATA || localItems.length >= limit) {
     return json({ ok: true, items: localItems, source: { local: localItems.length, official: 0 } });
   }
 
-  const master = await env.CATALOG_KV.get('parts:master', { type: 'json' });
+  const master = await env.TAGRO_DATA.get('parts:master', { type: 'json' });
   if (!Array.isArray(master)) {
     return json({ ok: true, items: localItems, source: { local: localItems.length, official: 0 } });
   }
@@ -1955,7 +1955,7 @@ async function listCatalogItems(env, url) {
     const itemType = catalogTypeFromGroup(part?.group);
     if (type && CATALOG_TYPES.has(type) && itemType !== type) continue;
     const partNumber = cleanText(part?.no || part?.id, 100).toUpperCase();
-    const tagroName = cleanText(part?.tagroName, 240);
+    const tagroName = cleanText(part?.tagroName || part?.name, 240);
     const stihlName = cleanText(part?.stihlName || part?.name, 240);
     const itemName = tagroName || stihlName;
     const hsnSac = cleanText(part?.hsn, 30).toUpperCase();
@@ -4947,65 +4947,10 @@ async function requestCatalogTagroName(request, env, session) {
 }
 
 async function createCatalogNameSuggestions(request, env, session) {
-  if (!env.CATALOG_KV) return json({ ok: false, error: 'Cloud catalog is not connected.' }, 503);
-  const body = await readJson(request);
-  const models = cleanStringList(Array.isArray(body.models) ? body.models : String(body.models || '').split(/[\n,]/), 30, 80)
-    .map(normalizeModelKey)
-    .filter(Boolean);
-  const limit = Math.min(Math.max(Number(body.limit) || 100, 1), 500);
-  if (!models.length) return json({ ok: false, error: 'Provide at least one STIHL machine model.' }, 400);
-
-  const master = await env.CATALOG_KV.get('parts:master', { type: 'json' });
-  if (!Array.isArray(master)) return json({ ok: false, error: 'Master parts list is unavailable.' }, 503);
-  const masterByPart = new Map(master.map(part => [normalizePartNumber(part?.no || part?.id), part]));
-  const candidates = new Map();
-  for (const model of models) {
-    const structure = await env.CATALOG_KV.get(`parts:${model}`, { type: 'json' });
-    if (!structure?.sections) continue;
-    for (const [section, parts] of Object.entries(structure.sections)) {
-      for (const part of Array.isArray(parts) ? parts : []) {
-        const number = normalizePartNumber(part?.no || part?.partNumber || part?.id);
-        if (!number || candidates.has(`${model}:${number}`)) continue;
-        const masterPart = masterByPart.get(number) || {};
-        const tagroName = cleanText(masterPart.tagroName || part.tagroName, 240);
-        const stihlName = cleanText(masterPart.stihlName || masterPart.name || part.stihlName || part.name, 240);
-        if (tagroName || !stihlName) continue;
-        const suggestedName = suggestFamiliarPartName(stihlName);
-        candidates.set(`${model}:${number}`, {
-          partNumber: number, model, section: cleanText(section, 120),
-          stihlName, suggestedTagroName: suggestedName,
-          confidence: suggestedName !== stihlName ? 0.76 : 0.58,
-          rationale: `Cleaned from the official STIHL name for ${formatModelKey(model)}; review against TAGRO workshop usage.`
-        });
-        if (candidates.size >= limit) break;
-      }
-      if (candidates.size >= limit) break;
-    }
-    if (candidates.size >= limit) break;
-  }
-  const now = new Date().toISOString();
-  const suggestions = [...candidates.values()];
-  if (suggestions.length) {
-    await env.DB.batch(suggestions.map(suggestion => env.DB.prepare(
-      `INSERT OR IGNORE INTO catalog_name_suggestions
-        (id, canonical_part_number, model_key, stihl_name, suggested_tagro_name,
-         rationale, confidence, status, created_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'suggested', ?, ?)`
-    ).bind(
-      makeId('namesuggestion'), suggestion.partNumber, suggestion.model, suggestion.stihlName,
-      suggestion.suggestedTagroName, suggestion.rationale, suggestion.confidence, session.id, now
-    )));
-  }
-  console.log(JSON.stringify({
-    event: 'catalog.name_suggestions_created', models,
-    suggestionCount: suggestions.length, staffId: session.id
-  }));
   return json({
-    ok: true, models, suggestions,
-    message: suggestions.length
-      ? 'Suggestions were saved for review. No catalog names were changed.'
-      : 'No unnamed parts were found for the selected models.'
-  });
+    ok: false,
+    error: 'Model-specific catalog naming is parked in this release.'
+  }, 410);
 }
 
 function suggestFamiliarPartName(value) {
@@ -5025,156 +4970,81 @@ function suggestFamiliarPartName(value) {
 }
 
 async function listKnowledgeModels(env) {
-  if (!env.CATALOG_KV) return json({ ok: false, error: 'Cloud catalog is not connected.' }, 503);
-  const [index, priceKeys, metadata] = await Promise.all([
-    env.CATALOG_KV.get('parts:_index', { type: 'json' }).then(value => value || {}),
-    listKvNames(env.CATALOG_KV, 'parts-price:'),
-    env.CATALOG_KV.get('parts:master:metadata', { type: 'json' }).then(value => value || {})
-  ]);
-  const priceModels = priceKeys
-    .map(key => key.slice('parts-price:'.length))
-    .filter(model => model && model !== 'master_lookup');
-  const modelKeys = [...new Set([...Object.keys(index), ...priceModels])].sort();
-  const priceSet = new Set(priceModels);
   return json({
     ok: true,
-    models: modelKeys.map(key => ({
-      key,
-      label: formatModelKey(key),
-      hasParts: Boolean(index[key]),
-      hasPrices: priceSet.has(key)
-    })),
+    models: [],
+    parked: true,
     sources: {
-      structuredModels: Object.keys(index).length,
-      pricedModels: priceSet.size,
-      masterPriceList: true,
-      masterPriceItems: Number(metadata.uniqueItems || 0),
+      structuredModels: 0,
+      pricedModels: 0,
+      masterPriceList: Boolean(env.TAGRO_DATA),
       manuals: Boolean(env.MANUALS)
     }
   });
 }
 
 async function searchKnowledgeParts(env, url) {
-  if (!env.CATALOG_KV) return json({ ok: false, error: 'Cloud catalog is not connected.' }, 503);
-  const modelKey = normalizeModelKey(url.searchParams.get('model'));
+  if (!env.TAGRO_DATA) return json({ ok: false, error: 'TAGRO parts are not connected.' }, 503);
   const query = cleanText(url.searchParams.get('query'), 120).toLowerCase();
   const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 80, 1), 500);
-  if (!modelKey && query.length < 2) {
-    return json({ ok: false, error: 'Select a model or enter at least two search characters.' }, 400);
+  if (query.length < 2) {
+    return json({ ok: false, error: 'Enter at least two search characters.' }, 400);
   }
 
-  const [structure, priceSheet, master] = await Promise.all([
-    modelKey ? env.CATALOG_KV.get(`parts:${modelKey}`, { type: 'json' }) : null,
-    modelKey ? env.CATALOG_KV.get(`parts-price:${modelKey}`, { type: 'json' }) : null,
-    query.length >= 2 ? env.CATALOG_KV.get('parts:master', { type: 'json' }) : null
-  ]);
-  const results = new Map();
-  const add = (part, source, section = null) => {
+  const master = await env.TAGRO_DATA.get('parts:master', { type: 'json' });
+  if (!Array.isArray(master)) {
+    return json({ ok: false, error: 'TAGRO parts list is unavailable.' }, 503);
+  }
+  const results = [];
+  for (const part of master) {
     const partNumber = cleanText(part?.no || part?.partNumber || part?.id, 100).toUpperCase();
-    const tagroName = cleanText(part?.tagroName, 240);
-    const stihlName = cleanText(part?.stihlName || part?.name, 240);
+    const tagroName = cleanText(part?.tagroName || part?.name, 240);
+    const stihlName = cleanText(part?.stihlName, 240);
     const aliases = Array.isArray(part?.aliases)
       ? cleanStringList(part.aliases, 20, 240)
       : cleanStringList(String(part?.alias || '').split(','), 20, 240);
-    const name = tagroName || cleanText(part?.name, 240) || stihlName;
-    if (!partNumber && !name) return;
+    if (!partNumber || !tagroName) continue;
     const score = flexiblePartScore(query, {
-      partNumber, tagroName: tagroName || name, stihlName, aliases,
-      section, modelGroup: part?.modelGroup, models: part?.models
+      partNumber, tagroName, stihlName, aliases,
+      modelGroup: part?.modelGroup, models: part?.models
     });
-    if (query && score < 0) return;
-    const key = normalizePartNumber(partNumber) || `${source}:${results.size}`;
-    const existing = results.get(key) || {
+    if (score < 0) continue;
+    results.push({
       partNumber,
-      name,
-      tagroName: tagroName || null,
+      name: tagroName,
+      tagroName,
       stihlName: stihlName || null,
       aliases,
-      section,
-      reference: cleanText(part?.ref, 40) || null,
-      quantity: optionalNumber(part?.qty),
-      hsn: null,
-      gst: null,
-      retailPrice: null,
-      mrp: null,
-      modelGroup: null,
-      models: [],
-      sources: [],
+      hsn: cleanText(part?.hsn, 30).toUpperCase() || null,
+      gst: optionalNumber(part?.gst),
+      retailPrice: optionalNumber(part?.retail ?? part?.price),
+      mrp: optionalNumber(part?.mrp),
+      modelGroup: cleanText(part?.modelGroup, 100) || null,
+      models: Array.isArray(part?.models) ? cleanStringList(part.models, 30, 100) : [],
+      sources: ['tagro_parts_master'],
+      mappingStatus: 'tagro_master',
       _score: score
-    };
-    if (tagroName) {
-      existing.tagroName = tagroName;
-      existing.name = tagroName;
-    } else if (!existing.name && name) {
-      existing.name = name;
-    }
-    if (stihlName) existing.stihlName = stihlName;
-    if (aliases.length) existing.aliases = [...new Set([...(existing.aliases || []), ...aliases])];
-    if (!existing.section && section) existing.section = section;
-    if (!existing.reference && part?.ref) existing.reference = cleanText(part.ref, 40);
-    if (existing.quantity === null && part?.qty !== undefined) existing.quantity = optionalNumber(part.qty);
-    const hsn = cleanText(part?.hsn, 30).toUpperCase();
-    const gst = optionalNumber(part?.gst);
-    const retail = optionalNumber(part?.retail ?? part?.price);
-    const mrp = optionalNumber(part?.mrp);
-    if (hsn) existing.hsn = hsn;
-    if (gst !== null && Number.isFinite(gst)) existing.gst = gst;
-    if (retail !== null && Number.isFinite(retail)) existing.retailPrice = retail;
-    if (mrp !== null && Number.isFinite(mrp)) existing.mrp = mrp;
-    if (part?.modelGroup) existing.modelGroup = cleanText(part.modelGroup, 100);
-    if (Array.isArray(part?.models)) {
-      existing.models = [...new Set([...(existing.models || []), ...cleanStringList(part.models, 30, 100)])];
-    }
-    existing._score = Math.max(Number(existing._score || 0), score);
-    if (!existing.sources.includes(source)) existing.sources.push(source);
-    results.set(key, existing);
-  };
-  if (structure?.sections) {
-    for (const [section, parts] of Object.entries(structure.sections)) {
-      for (const part of Array.isArray(parts) ? parts : []) add(part, 'parts_diagram', section);
-    }
+    });
   }
-  if (priceSheet?.sections) {
-    for (const [section, sectionData] of Object.entries(priceSheet.sections)) {
-      const parts = Array.isArray(sectionData) ? sectionData : sectionData?.parts;
-      for (const part of Array.isArray(parts) ? parts : []) add(part, 'model_price_sheet', section);
-    }
-  }
-  if (Array.isArray(master)) {
-    for (const part of master) {
-      const masterKey = normalizePartNumber(part?.no || part?.partNumber || part?.id);
-      if (!modelKey || (masterKey && results.has(masterKey))) add(part, 'master_price_list', null);
-    }
-  }
-  const parts = [...results.values()]
-    .sort((a, b) => b._score - a._score ||
-      Number(b.sources.includes('master_price_list')) - Number(a.sources.includes('master_price_list')) ||
-      a.name.localeCompare(b.name))
+  const totalMatches = results.length;
+  const parts = results
+    .sort((a, b) => b._score - a._score || a.tagroName.localeCompare(b.tagroName))
     .slice(0, limit)
     .map(part => {
       const { _score, ...publicPart } = part;
-      const hasDiagram = part.sources.includes('parts_diagram');
-      const hasCurrentMaster = part.sources.includes('master_price_list');
-      return {
-        ...publicPart,
-        diagramPartNumber: hasDiagram ? part.partNumber : null,
-        currentPartNumber: hasCurrentMaster ? part.partNumber : null,
-        mappingStatus: hasDiagram
-          ? (hasCurrentMaster ? 'exact_current' : 'needs_supersession_review')
-          : (hasCurrentMaster ? 'current_master' : 'price_sheet_only')
-      };
+      return publicPart;
     });
   return json({
     ok: true,
-    model: modelKey || null,
+    model: null,
     query,
     parts,
-    totalMatches: results.size,
-    truncated: results.size > limit,
+    totalMatches,
+    truncated: totalMatches > limit,
     source: {
-      structure: Boolean(structure),
-      modelPrices: Boolean(priceSheet),
-      masterPrices: Array.isArray(master)
+      binding: 'TAGRO_DATA',
+      key: 'parts:master',
+      masterPrices: true
     }
   });
 }

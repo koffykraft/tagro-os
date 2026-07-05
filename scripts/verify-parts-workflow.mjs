@@ -23,7 +23,9 @@ check(parkedTerms.every(term => !workspace.includes(term) && !work.includes(term
 check((workspace.match(/async searchParts\(\)/g) || []).length === 1, 'workbench has one parts search method');
 check(workspace.includes('Api.request(`/knowledge/parts?query=${encodeURIComponent(query)}&limit=40`)'), 'workbench uses one Worker search endpoint');
 check(!workspace.includes('model=${') && !workspace.includes('/catalog?type=part'), 'workbench search has no model or catalog fallback');
-check(worker.includes("env.CATALOG_KV.get('parts:master'") && worker.includes('async function searchKnowledgeParts'), 'Worker search reads parts:master KV');
+check(worker.includes("env.TAGRO_DATA.get('parts:master'") && worker.includes('async function searchKnowledgeParts'), 'Worker search reads TAGRO_DATA parts:master');
+check(!worker.includes("get(`parts:${") && !worker.includes("get(`parts-price:${") &&
+  !worker.includes("get('parts:_index'"), 'model-specific catalog KV reads remain parked');
 check(workspace.includes('part.tagroName || part.name') && workspace.includes('part.aliases'), 'TAGRO names and aliases are returned');
 check(workspace.includes('data-bench-qty') && workspace.includes('data-bench-add'), 'price results include quantity and add controls');
 check(workspace.includes('existing.quantity =') && workspace.includes('addCatalogPart(items[index], quantity)'), 'repeat add updates quantity');

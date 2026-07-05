@@ -17,17 +17,3 @@ CREATE INDEX machine_ownership_history_machine_idx
 CREATE UNIQUE INDEX machine_ownership_history_active_unique
   ON machine_ownership_history(machine_id)
   WHERE ended_at IS NULL;
-
-INSERT INTO machine_ownership_history
-  (id, machine_id, customer_id, started_at, ended_at, transferred_by, note, created_at)
-SELECT
-  'ownership_' || cm.id,
-  cm.id,
-  cm.customer_id,
-  cm.first_seen_at,
-  NULL,
-  cm.created_by,
-  'Initial owner migrated from customer machine record',
-  cm.created_at
-FROM customer_machines cm
-WHERE cm.active = 1;

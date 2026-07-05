@@ -59,3 +59,81 @@
 @media(max-width:460px){
   .progress-track{overflow-x:auto;grid-template-columns:repeat(6,56px);padding-bottom:5px}.workspace-card{padding:12px}.bench-facts{grid-template-columns:1fr}.reference-actions{grid-template-columns:1fr 1fr}.reference-actions a:last-child{grid-column:1/-1}.frequent-parts{grid-template-columns:1fr 1fr}.bench-part-result{grid-template-columns:minmax(0,1fr) auto}.bench-part-result label,.bench-part-result button{grid-row:2}.bench-part-result label{grid-column:1}.bench-part-result button{grid-column:2}.part-row{grid-template-columns:1fr 1fr}.communication-actions{grid-template-columns:1fr 1fr}
 }
+
+/* Human-readable workbench: machine first, references secondary, actions thumb-safe. */
+.job-workspace-page{font-size:16px;line-height:1.5}
+.topbar-job strong{font-size:20px;font-weight:700}.topbar-job span{font-size:14px;color:var(--space-muted)}
+.job-kicker{font-size:14px;font-weight:700;text-transform:none}
+.job-context h1{font-size:28px;font-weight:700}
+.job-context-main>p:last-child{font-size:18px;font-weight:600;line-height:1.5}
+.job-context-state>span:last-child,.workspace-status{font-size:14px}
+.workspace-tabs{gap:18px}.workspace-tabs a{display:grid;place-items:center;min-height:44px;padding:10px 12px;font-size:15px}
+.workspace-card{padding:16px}.workspace-card-head h2{font-size:18px}.workspace-card-head>span{font-size:14px}
+.bench-facts>div,.bench-notes>div{padding:16px}
+.bench-facts small,.bench-notes small,.bench-subhead,.bench-subhead strong{font-size:14px}
+.bench-facts strong,.bench-facts a,.bench-notes p{font-size:16px;line-height:1.5}
+.next-action-content>p,.workspace-loading,.workspace-empty,.next-action-message,
+.integration-note,.assembly-empty{font-size:16px;line-height:1.5}
+.bench-note-field,.pause-reason-field{gap:8px;font-size:14px}
+.bench-note-field textarea,.pause-reason-field select{min-height:48px;font-size:16px}
+.bench-note-field textarea{min-height:96px}
+.workspace-primary,.outline-button,.job-controls .outline-button,.reference-actions a,
+.reference-actions button,.frequent-part button[data-add-frequent],.estimate-share-actions .outline-button,
+.parts-mode-toggle button,.assembly-carousel button,.parts-result-actions button,.confirm-part{
+  min-height:44px;padding:10px 14px;font-size:16px
+}
+.next-action-buttons,.reference-actions,.communication-actions,.estimate-share-actions,
+.parts-result-actions{gap:12px}
+.machine-location,.technician-row{padding:16px}.machine-location strong,.technician-row strong{font-size:16px}
+.machine-location small,.technician-row small{font-size:14px}.workspace-select{min-height:44px;font-size:16px}
+.job-workspace-page .machine-location .outline-button{min-width:44px;min-height:44px;padding:10px;font-size:16px}
+.job-workspace-page #bench-phone{display:inline-flex;align-items:center;min-height:44px}
+.queue-job{min-height:60px;padding:12px 16px}.queue-job strong,.queue-all-link{font-size:16px}
+.queue-job small{font-size:14px}
+.queue-all-link{align-items:center;min-height:44px}
+.common-parts{gap:12px}.common-parts>button{min-height:64px;padding:12px}
+.common-parts strong,.common-parts span{font-size:16px}
+.bench-parts-search,.bench-fast-results{gap:12px}
+.bench-part-result{gap:12px;padding:16px}
+.bench-part-result strong,.frequent-part strong,.parts-result strong{font-size:16px}
+.bench-part-result small,.frequent-part small,.parts-result small,.part-source{font-size:14px}
+.bench-part-result>b,.parts-result-price{font-size:18px}
+.bench-part-result label,.parts-result-actions label{font-size:14px}
+.bench-part-result input,.parts-result-actions input{min-height:44px;font-size:16px}
+.bench-part-result button{min-height:44px;padding:10px 14px;font-size:16px}
+.frequent-part{gap:12px;padding:16px}
+.basket-summary span small{font-size:14px}
+.basket-line{gap:12px;font-size:16px;line-height:1.5}.basket-line strong{font-size:16px}
+.estimate-labour summary,.estimate-labour-grid label{font-size:14px}
+.estimate-labour-grid input{min-height:44px;font-size:16px}
+.order-parts-link,#add-manual-part{
+  min-height:48px;border:1px solid #e6a17e;background:#fff3ec;color:var(--workspace-orange-deep);
+  font-size:16px;font-weight:850
+}
+#estimate-state{font-size:14px}
+.communication-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
+.communication-actions .outline-button{min-height:48px;padding:12px;font-size:16px}
+.timeline-event{min-width:210px;padding:16px}.timeline-event strong{font-size:16px}
+.timeline-event span,.timeline-event small{font-size:14px}
+.progress-step{min-width:70px;font-size:14px;line-height:1.35}.progress-step i{width:28px;height:28px}
+.progress-step:not(:last-child):after{top:13px;left:calc(50% + 14px);width:calc(100% - 28px)}
+.parts-result{gap:12px;padding:16px}.parts-result span{font-size:16px}
+.switch-job{min-height:60px;padding:16px}.switch-job strong{font-size:16px}.switch-job small{font-size:14px}
+@media(max-width:760px){
+  .workspace-main{padding:12px 12px 104px}
+  .job-context{padding:16px}.job-context h1{font-size:24px}
+  .job-controls{gap:12px;padding:12px 0}
+  .workspace-tabs{gap:0;justify-content:space-between;overflow-x:hidden}
+  .workspace-tabs a{flex:1;min-width:0;padding:10px 8px}
+  .workspace-layout{gap:12px;padding-top:12px}
+  .communication-actions{grid-template-columns:1fr 1fr}
+  .job-workspace-page .global-customer-search{
+    right:12px;bottom:88px;width:48px;min-width:48px;padding:0;font-size:0
+  }
+  .job-workspace-page .global-customer-search:before{content:"⌕";font-size:22px}
+}
+@media(max-width:460px){
+  .workspace-card{padding:16px}
+  .bench-part-result{grid-template-columns:1fr auto}
+  .bench-part-result label,.bench-part-result button{grid-row:auto}
+}

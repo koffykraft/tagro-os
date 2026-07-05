@@ -21,7 +21,7 @@ database_id = "4f53e926-c25c-4279-aa14-8ca759a4ed4a"
 migrations_dir = "migrations"
 
 [[kv_namespaces]]
-binding = "CATALOG_KV"
+binding = "TAGRO_DATA"
 id = "3a0fd40900114bb1861163a861dcf7e1"
 remote = true
 
@@ -29,10 +29,6 @@ remote = true
 binding = "MANUALS"
 bucket_name = "tagro-manuals"
 remote = true
-
-[[r2_buckets]]
-binding = "DOCS"
-bucket_name = "tagro-docs"
 
 [observability]
 enabled = true
@@ -61,16 +57,12 @@ routes = []
   migrations_dir = "migrations"
 
   [[env.staging.kv_namespaces]]
-  binding = "CATALOG_KV"
+  binding = "TAGRO_DATA"
   id = "cd758d9505544f84a9158b3fcc722328"
 
   [[env.staging.r2_buckets]]
   binding = "MANUALS"
-  bucket_name = "tagro-manuals-staging"
-
-  [[env.staging.r2_buckets]]
-  binding = "DOCS"
-  bucket_name = "tagro-docs-staging"
+  bucket_name = "tagro-manuals"
 
   [env.staging.observability]
   enabled = true

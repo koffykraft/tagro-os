@@ -109,3 +109,36 @@
   .photo-actions{grid-template-columns:1fr 1fr}.photo-action.admin-only:not([hidden]){grid-column:1/-1}
   .accessory-options{grid-template-columns:1fr}
 }
+
+/* Workshop readability for bright-light, phone and gloved-hand intake. */
+.intake-page{font-size:16px;line-height:1.5}
+.intake-top-nav a,.intake-back,.intake-steps li{font-size:15px}
+.intake-top-nav a{min-height:44px;padding:11px 14px}
+.intake-back{display:inline-flex;align-items:center;min-height:44px}
+.intake-heading p,.intake-notice p,.intake-card-head p,.review-section-title small,
+.draft-state,.review-badge,.photo-action small,.intake-photo-name,.intake-submit-bar small,
+.intake-inbox-item small,.intake-inbox-item b,.dialog-message{font-size:14px}
+.intake-notice strong,.intake-card-head h2,.photo-action strong,.photo-section-head strong,
+.review-section-title strong,.field-label,.review-card .field,.intake-submit-bar strong,
+.intake-inbox-item strong,.configured-complaint{font-size:16px}
+.intake-card-head,.review-section,.intake-dialog-card{padding:16px}
+.photo-action,.text-button,.complaint-chip,.intake-submit,.draft-actions button,
+.intake-dialog-actions button,.configured-complaint button{min-height:44px;font-size:16px}
+.photo-actions,.complaint-presets,.contact-verification-options,.accessory-options,
+.draft-actions,.intake-dialog-actions{gap:12px}
+.review-card .control,.photo-type,.add-complaint-row .control{min-height:48px;font-size:16px}
+.complaint-chip{padding:10px 14px}
+.accessories-picker summary,.accessory-options label,.contact-verification-options label{font-size:16px}
+.accessory-options label,.contact-verification-options label{min-height:48px;padding:12px}
+.space-toast{font-size:16px;line-height:1.5}
+.intake-page .intake-heading .outline-button{min-height:44px;padding:10px 14px;font-size:16px}
+@media(max-width:640px){
+  .intake-heading p,.intake-notice p,.intake-card-head p{font-size:14px}
+  .intake-card-head h2,.photo-action strong,.draft-actions button{font-size:16px}
+  .photo-action{min-height:96px}
+  .intake-mobile-nav{height:72px}
+  .intake-mobile-nav a{min-height:44px;font-size:15px}
+  .intake-mobile-nav span{font-size:20px}
+  .intake-submit-bar{bottom:80px}
+  .space-toast{bottom:84px}
+}

@@ -170,3 +170,28 @@
   .resume-job{grid-template-columns:minmax(0,1fr) 55px}.resume-machine-mark{width:52px;height:52px;font-size:25px}
   .resume-actions{flex-wrap:wrap}.resume-button{min-width:105px}.park-button{padding:8px}
 }
+
+/* Workshop readability for personal space and shared shell navigation. */
+.my-space-page{font-size:16px;line-height:1.5}
+.space-nav a,.space-nav button,.drawer-panel>a,.drawer-panel>button,.drawer-app-links>a,
+.mobile-bottom-nav a,.mobile-bottom-nav button{min-height:44px;font-size:15px}
+.my-space-page .outline-button,.my-space-page .card-link{min-height:44px;font-size:16px}
+.my-space-page .card-link{display:inline-flex;align-items:center;gap:8px}
+.my-space-page .shortcut-tile{min-width:82px;min-height:76px;font-size:15px}
+.space-card,.summary-card,.resume-card,.parked-card,.communication-card,.shortcuts-card,
+.frequent-card{padding:16px}
+.outline-button,.resume-button,.park-button,.save-personalization{min-height:44px;font-size:16px}
+.topbar-greeting,.space-heading p,.setting-row strong,.shortcut-setting,.custom-shortcut-grid label,
+.custom-shortcut-grid input,.field-message,.space-toast{font-size:16px}
+.role-label,.setting-row small,.communication-state small{font-size:14px}
+.resume-machine{font-size:20px;font-weight:600}
+.parked-item strong,.frequent-list strong,.shortcut-name{font-size:16px}
+.parked-item small,.frequent-list small{font-size:14px}
+@media(max-width:760px){
+  .topbar-greeting{font-size:16px}
+  .space-heading p{font-size:16px}
+  .mobile-bottom-nav{height:76px}
+  .mobile-bottom-nav a,.mobile-bottom-nav button{font-size:15px}
+  .space-main{padding-bottom:102px}
+  .space-toast{bottom:88px}
+}

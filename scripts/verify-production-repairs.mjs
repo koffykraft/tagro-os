@@ -196,16 +196,15 @@ for (const complaint of expectedComplaints) {
 
 {
   const worker = read(path.join(osRoot, 'src', 'worker.js'));
-  const catalog = read(path.join(osRoot, 'tagros', 'app-catalog.html'));
-  assert.match(worker, /mappingStatus:\s*hasDiagram/);
-  assert.match(worker, /needs_supersession_review/);
-  assert.match(catalog, /Current number needed/);
-  assert.match(catalog, /part\.currentPartNumber \|\| part\.partNumber/);
-  assert.match(catalog, /document\.getElementById\('name-mode'\)\.value === 'stihl'/);
-  assert.match(catalog, /asset\.type === 'image'/);
+  const workspace = read(path.join(osRoot, 'tagros', 'work-space.js'));
+  assert.match(worker, /env\.TAGRO_DATA\.get\('parts:master'/);
+  assert.match(worker, /mappingStatus:\s*'tagro_master'/);
+  assert.doesNotMatch(worker, /needs_supersession_review/);
+  assert.match(workspace, /part\.tagroName \|\| part\.name/);
+  assert.match(workspace, /data-bench-add/);
 }
 
 console.log(`PASS: ${expectedComplaints.length} complaint paths save correctly`);
 console.log('PASS: fixture cleanup backs up exact fixtures and preserves real-ID jobs');
 console.log('PASS: retired names and phone fixtures are absent from deployable service files');
-console.log('PASS: catalog UI blocks unverified diagram numbers and exposes verified current numbers');
+console.log('PASS: workbench reads only the TAGRO parts master and keeps diagram scope parked');
