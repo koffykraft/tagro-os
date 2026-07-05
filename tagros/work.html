@@ -74,6 +74,24 @@
         </nav>
 
         <div class="workspace-layout" id="overview">
+          <section class="workspace-card bench-glance-card">
+            <div class="workspace-card-head">
+              <div><span class="card-mark orange">M</span><h2>Machine &amp; customer</h2></div>
+              <button class="text-button" id="edit-bench-details" type="button">Edit</button>
+            </div>
+            <div class="bench-facts">
+              <div><small>Customer</small><strong id="bench-customer">Customer pending</strong></div>
+              <div><small>Phone</small><a id="bench-phone" href="#">Phone pending</a></div>
+              <div><small>Place</small><strong id="bench-place">Place pending</strong></div>
+              <div><small>Machine</small><strong id="bench-machine">Machine pending</strong></div>
+              <div><small>Serial number</small><strong id="bench-serial">Not recorded</strong></div>
+              <div><small>Technician</small><strong id="bench-technician">Unassigned</strong></div>
+            </div>
+            <div class="bench-notes">
+              <div><small>Complaint</small><p id="bench-complaint">Not recorded</p></div>
+              <div><small>Workshop observation</small><p id="bench-observation">No observation yet.</p></div>
+            </div>
+          </section>
           <section class="workspace-card next-action-card">
             <div class="workspace-card-head">
               <div><span class="card-mark orange">◎</span><h2>Next action</h2></div>
@@ -115,20 +133,32 @@
 
           <section class="workspace-card parts-reference-card" id="parts-reference">
             <div class="workspace-card-head">
-              <div><span class="card-mark orange">◇</span><h2>Parts & reference</h2></div>
+              <div><span class="card-mark orange">P</span><h2>Parts for this machine</h2></div>
+              <span id="bench-parts-model">Loading model</span>
             </div>
-            <button class="workspace-primary" id="open-parts-search" type="button">Open parts picker</button>
+            <div class="common-parts-block">
+              <div class="bench-subhead"><strong>Common parts</strong><span>Tap to add</span></div>
+              <div class="common-parts" id="common-model-parts"><div class="workspace-loading">Loading parts…</div></div>
+            </div>
+            <div class="bench-parts-search">
+              <input class="control" id="bench-part-query" type="search" autocomplete="off" placeholder="TAGRO part name, alias or number">
+              <button class="workspace-primary" id="bench-part-search-button" type="button">Find</button>
+            </div>
+            <div class="bench-fast-results" id="bench-fast-results">
+              <div class="workspace-empty">Type a familiar part name to see price and add it.</div>
+            </div>
             <div class="reference-actions">
-              <a id="global-parts-link" href="app-catalog.html">Global parts</a>
-              <a id="model-reference-link" href="app-catalog.html">Manuals & diagrams</a>
+              <button id="open-parts-search" type="button">More parts</button>
+              <button id="open-visual-reference" type="button">Diagram</button>
+              <a id="model-reference-link" href="app-catalog.html">STIHL reference</a>
             </div>
-            <p class="integration-note">Search and add parts here without leaving this job. Visual callouts arrive with the Machine Knowledge page.</p>
+            <a id="global-parts-link" href="app-catalog.html" hidden>STIHL reference</a>
           </section>
 
           <section class="workspace-card frequent-parts-card">
             <div class="workspace-card-head">
-              <div><span class="card-mark">▦</span><h2>Frequent parts</h2></div>
-              <button class="text-button" id="edit-frequent" type="button">Add from catalogue</button>
+              <div><span class="card-mark">▦</span><h2>My pinned parts</h2></div>
+              <button class="text-button" id="edit-frequent" type="button">Add part</button>
             </div>
             <div class="frequent-parts" id="frequent-parts"></div>
           </section>
@@ -143,6 +173,7 @@
             </div>
             <div class="basket-preview" id="basket-preview"></div>
             <button class="workspace-primary" id="create-estimate" type="button">Create estimate</button>
+            <a class="outline-button full-button order-parts-link" id="order-parts-link" href="app-catalog.html">Order / hold these parts</a>
             <button class="outline-button full-button" id="add-manual-part" type="button">＋ Add manual part</button>
             <p class="integration-note" id="estimate-state">No estimate loaded.</p>
           </section>

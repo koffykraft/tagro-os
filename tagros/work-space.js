@@ -12,6 +12,8 @@ const JobWorkspace = {
   modelKey: '',
   benchModelOverride: '',
   modelParts: [],
+  loadedModelKey: '',
+  diagramAsset: null,
   modelChoicesLoaded: false,
   activeSection: '',
   partsMode: 'fast',
@@ -42,7 +44,12 @@ const JobWorkspace = {
     document.querySelector('.drawer-heading button').addEventListener('click', () => this.closeDrawer());
     document.getElementById('sign-out').addEventListener('click', () => this.signOut());
     document.getElementById('edit-details').addEventListener('click', () => this.openDialog('job-details-dialog'));
+    document.getElementById('edit-bench-details').addEventListener('click', () => this.openDialog('job-details-dialog'));
     document.getElementById('open-parts-search').addEventListener('click', () => this.openParts());
+    document.getElementById('open-visual-reference').addEventListener('click', async () => {
+      await this.openParts();
+      this.setPartsMode('visual');
+    });
     document.getElementById('edit-frequent').addEventListener('click', () => this.openParts());
     document.getElementById('add-manual-part').addEventListener('click', () => this.addManualPart());
     document.getElementById('create-estimate').addEventListener('click', () => this.createEstimate());
@@ -52,9 +59,11 @@ const JobWorkspace = {
     document.getElementById('parts-model-select').addEventListener('change', async event => {
       this.modelKey = event.target.value;
       this.benchModelOverride = this.modelKey;
+      this.loadedModelKey = '';
       document.getElementById('parts-model-title').textContent = this.modelLabel(this.modelKey);
       document.getElementById('parts-query').value = '';
       this.updatePartsLinks();
+      await this.loadWorkbenchParts();
       await this.loadModelParts();
     });
     document.getElementById('parts-query').addEventListener('input', () => {
@@ -63,6 +72,14 @@ const JobWorkspace = {
     });
     document.getElementById('parts-query').addEventListener('keydown', event => {
       if (event.key === 'Enter') { event.preventDefault(); this.searchParts(); }
+    });
+    document.getElementById('bench-part-search-button').addEventListener('click', () => this.searchBenchParts());
+    document.getElementById('bench-part-query').addEventListener('input', () => {
+      clearTimeout(this.partsTimer);
+      this.partsTimer = setTimeout(() => this.searchBenchParts(), 180);
+    });
+    document.getElementById('bench-part-query').addEventListener('keydown', event => {
+      if (event.key === 'Enter') { event.preventDefault(); this.searchBenchParts(); }
     });
     document.getElementById('switch-job').addEventListener('click', () => this.openSwitch());
     document.getElementById('previous-job').addEventListener('click', () => this.navigateRelative(-1));
@@ -105,6 +122,7 @@ const JobWorkspace = {
     await Promise.all([
       this.loadQueue(),
       this.loadEstimate(),
+      this.loadWorkbenchParts(),
       ['manager', 'owner'].includes(role) ? this.loadStaff() : Promise.resolve()
     ]);
     this.renderFrequentParts();
@@ -139,11 +157,27 @@ const JobWorkspace = {
     this.renderBasket();
     this.renderTimeline();
     this.renderCommunication();
+    this.renderBenchFacts();
     if (!this.benchModelOverride) this.modelKey = this.machineModel(order.machineDescription || machine);
     const globalUrl = `app-catalog.html?job=${encodeURIComponent(this.id)}&model=${encodeURIComponent(this.modelKey)}`;
     document.getElementById('global-parts-link').href = globalUrl;
     document.getElementById('model-reference-link').href = globalUrl;
     document.getElementById('open-global-parts').href = globalUrl;
+    document.getElementById('order-parts-link').href = globalUrl;
+  },
+
+  renderBenchFacts() {
+    const order = this.order || {};
+    const phone = String(order.customerPhone || '').replace(/\D/g, '');
+    document.getElementById('bench-customer').textContent = order.customerName || 'Not recorded';
+    document.getElementById('bench-phone').textContent = order.customerPhone || 'Not recorded';
+    document.getElementById('bench-phone').href = phone ? `tel:${phone}` : '#';
+    document.getElementById('bench-place').textContent = order.customerPlace || 'Not recorded';
+    document.getElementById('bench-machine').textContent = ServiceUI.machine(order);
+    document.getElementById('bench-serial').textContent = order.serialNumber || 'Not recorded';
+    document.getElementById('bench-technician').textContent = order.assignedToName || 'Unassigned';
+    document.getElementById('bench-complaint').textContent = order.complaint || 'Not recorded';
+    document.getElementById('bench-observation').textContent = order.observation || 'No observation yet.';
   },
 
   ensureAssignedOption(order) {
@@ -496,6 +530,109 @@ const JobWorkspace = {
   updatePartsLinks() {
     const globalUrl = `app-catalog.html?job=${encodeURIComponent(this.id)}&model=${encodeURIComponent(this.modelKey)}`;
     document.getElementById('open-global-parts').href = globalUrl;
+    document.getElementById('global-parts-link').href = globalUrl;
+    document.getElementById('model-reference-link').href = globalUrl;
+    document.getElementById('order-parts-link').href = globalUrl;
+  },
+
+  async ensureModelParts() {
+    if (!this.modelKey) {
+      this.modelParts = [];
+      this.loadedModelKey = '';
+      this.diagramAsset = null;
+      return;
+    }
+    if (this.loadedModelKey === this.modelKey && this.modelParts.length) return;
+    const [data, assetData] = await Promise.all([
+      Api.request(`/knowledge/parts?model=${encodeURIComponent(this.modelKey)}&limit=500`),
+      Api.request(`/knowledge/assets?model=${encodeURIComponent(this.modelKey)}`).catch(() => ({ assets: [] }))
+    ]);
+    this.modelParts = (data.parts || []).map(part => this.catalogItem(part));
+    this.diagramAsset = (assetData.assets || []).find(asset => asset.type === 'pdf' || /parts|catalog/i.test(asset.name || '')) || null;
+    this.loadedModelKey = this.modelKey;
+  },
+
+  async loadWorkbenchParts() {
+    const host = document.getElementById('common-model-parts');
+    document.getElementById('bench-parts-model').textContent = this.modelLabel(this.modelKey);
+    if (!this.modelKey) {
+      host.innerHTML = '<div class="workspace-empty">Add the machine model to load its parts.</div>';
+      return;
+    }
+    host.innerHTML = '<div class="workspace-loading">Preparing machine parts...</div>';
+    try {
+      await this.ensureModelParts();
+      this.renderCommonModelParts();
+    } catch (error) {
+      host.innerHTML = `<div class="workspace-empty">${ServiceUI.esc(error.message)}</div>`;
+    }
+  },
+
+  commonModelParts() {
+    const keywords = ['air filter', 'fuel filter', 'spark plug', 'starter rope', 'clutch', 'sprocket', 'oil pump', 'av mount'];
+    const model = this.modelLabel(this.modelKey).toLowerCase();
+    const chosen = [];
+    const seen = new Set();
+    for (const keyword of keywords) {
+      const candidates = this.modelParts.filter(part => {
+        const name = `${part.tagro_name} ${part.stihl_name}`.toLowerCase();
+        return name.includes(keyword) && !seen.has(part.part_number) && (part.retail_price !== '' || part.mrp !== '');
+      }).sort((a, b) => {
+        const aName = `${a.tagro_name} ${a.stihl_name}`.toLowerCase();
+        const bName = `${b.tagro_name} ${b.stihl_name}`.toLowerCase();
+        const rank = name =>
+          (/pack of|tool|wrench|boot/.test(name) ? 50 : 0) -
+          (name.includes(model) ? 10 : 0) -
+          (name.startsWith(keyword) ? 4 : 0) +
+          name.length / 100;
+        return rank(aName) - rank(bName);
+      });
+      if (candidates[0]) {
+        seen.add(candidates[0].part_number);
+        chosen.push(candidates[0]);
+      }
+    }
+    return chosen.slice(0, 8);
+  },
+
+  renderCommonModelParts() {
+    const host = document.getElementById('common-model-parts');
+    const items = this.commonModelParts();
+    host.innerHTML = items.length ? items.map((item, index) => `
+      <button type="button" data-common-part="${index}">
+        <strong>${ServiceUI.esc(item.tagro_name || item.stihl_name || item.part_number)}</strong>
+        <span>${this.money(item.retail_price ?? item.mrp)}</span>
+      </button>`).join('') : '<div class="workspace-empty">Pin familiar parts as you use them.</div>';
+    host.querySelectorAll('[data-common-part]').forEach(button => button.addEventListener('click', () => {
+      this.addCatalogPart(items[Number(button.dataset.commonPart)], 1, false);
+    }));
+  },
+
+  searchBenchParts() {
+    const query = document.getElementById('bench-part-query').value.trim();
+    const host = document.getElementById('bench-fast-results');
+    if (query.length < 2) {
+      host.innerHTML = '<div class="workspace-empty">Type a familiar part name to see price and add it.</div>';
+      return;
+    }
+    const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const items = this.modelParts.filter(item => {
+      const text = [item.part_number, item.tagro_name, item.stihl_name, ...(item.aliases || [])].join(' ').toLowerCase();
+      return tokens.every(token => text.includes(token));
+    }).slice(0, 10);
+    host.innerHTML = items.length ? items.map((item, index) => `
+      <article class="bench-part-result">
+        <div><strong>${ServiceUI.esc(item.tagro_name || item.stihl_name || item.part_number)}</strong>
+        <small>${ServiceUI.esc(item.part_number)}${item.stihl_name ? ` - ${ServiceUI.esc(item.stihl_name)}` : ''}</small></div>
+        <b>${this.money(item.retail_price ?? item.mrp)}</b>
+        <label>Qty<input type="number" min="1" step="1" value="1" data-bench-qty="${index}"></label>
+        <button type="button" data-bench-add="${index}">Add</button>
+      </article>`).join('') : '<div class="workspace-empty">No matching part for this machine. Try fewer words or open STIHL reference.</div>';
+    host.querySelectorAll('[data-bench-add]').forEach(button => button.addEventListener('click', () => {
+      const index = Number(button.dataset.benchAdd);
+      const quantity = Number(host.querySelector(`[data-bench-qty="${index}"]`)?.value) || 1;
+      this.addCatalogPart(items[index], quantity, false);
+    }));
   },
 
   async loadModelParts() {
@@ -509,12 +646,8 @@ const JobWorkspace = {
     }
     host.innerHTML = '<div class="workspace-loading">Loading model assemblies…</div>';
     try {
-      const [data, assetData] = await Promise.all([
-        Api.request(`/knowledge/parts?model=${encodeURIComponent(this.modelKey)}&limit=500`),
-        Api.request(`/knowledge/assets?model=${encodeURIComponent(this.modelKey)}`).catch(() => ({ assets: [] }))
-      ]);
-      this.modelParts = (data.parts || []).map(part => this.catalogItem(part));
-      const diagramAsset = (assetData.assets || []).find(asset => asset.type === 'pdf' || /parts|catalog/i.test(asset.name || ''));
+      await this.ensureModelParts();
+      const diagramAsset = this.diagramAsset;
       const diagramLink = document.getElementById('parts-diagram-link');
       diagramLink.hidden = !diagramAsset;
       if (diagramAsset) diagramLink.href = diagramAsset.url;
@@ -620,24 +753,31 @@ const JobWorkspace = {
     }));
   },
 
-  addCatalogPart(item, quantity = 1) {
+  addCatalogPart(item, quantity = 1, closeDialog = true) {
     if (!item) return;
     WorkOrderForm.readParts();
-    WorkOrderForm.parts.push({
-      partNumber: item.part_number || '',
-      itemName: item.tagro_name || item.item_name || item.stihl_name || '',
-      quantity: Number(quantity) || 1,
-      unitPrice: item.retail_price ?? item.mrp ?? '',
-      hsnSac: item.hsn_sac || '',
-      gstRate: item.gst_rate ?? '',
-      notes: '',
-      source: item.data_source || 'catalog',
-      draft: false
-    });
+    const partNumber = item.part_number || '';
+    const existing = WorkOrderForm.parts.find(part => !part.draft && part.partNumber === partNumber);
+    if (existing) {
+      existing.quantity = (Number(existing.quantity) || 0) + (Number(quantity) || 1);
+    } else {
+      WorkOrderForm.parts.push({
+        partNumber,
+        itemName: item.tagro_name || item.item_name || item.stihl_name || '',
+        quantity: Number(quantity) || 1,
+        unitPrice: item.retail_price ?? item.mrp ?? '',
+        hsnSac: item.hsn_sac || '',
+        gstRate: item.gst_rate ?? '',
+        notes: '',
+        source: item.data_source || 'catalog',
+        draft: false
+      });
+    }
     WorkOrderForm.renderParts();
     WorkOrderForm.changed();
-    document.getElementById('parts-dialog').close();
-    this.showToast('Part added. Continue working on this job.');
+    this.renderBasket();
+    if (closeDialog && document.getElementById('parts-dialog').open) document.getElementById('parts-dialog').close();
+    this.showToast(existing ? 'Quantity updated on this job.' : 'Part added to this job.');
   },
 
   frequentParts() {

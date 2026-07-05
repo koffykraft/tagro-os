@@ -42,6 +42,11 @@ check(core.includes("document.dispatchEvent(new CustomEvent('tagro:parts-updated
 check(core.includes('data-part-hsn=') && core.includes('data-part-gst='), 'catalog tax metadata preserved');
 check(core.includes("draft:row.dataset.partDraft==='1'") && core.includes('savedParts=this.parts.filter'), 'search drafts excluded from autosave');
 check(js.includes('loadModelParts') && html.includes('parts-assembly-carousel'), 'model-first assembly picker connected');
+check(html.includes('bench-glance-card') && js.includes('renderBenchFacts'), 'customer and machine facts visible on the bench');
+check(html.includes('common-model-parts') && js.includes('commonModelParts'), 'model common-parts strip available');
+check(html.includes('bench-part-query') && js.includes('searchBenchParts'), 'inline TAGRO price-and-add search available');
+check(js.includes('existing.quantity =') && js.includes('this.renderBasket()'), 'repeat adds update the visible job list');
+check(html.includes('My queue') && html.includes('My pinned parts'), 'personal queue and pinned parts remain on the bench');
 
 console.log(`Service Workspace verification passed: ${assertions.length} checks.`);
 for (const assertion of assertions) console.log(`- ${assertion}`);
