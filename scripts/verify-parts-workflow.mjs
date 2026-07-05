@@ -6,7 +6,7 @@ const worker = readFileSync(resolve(root, 'src/worker.js'), 'utf8');
 const catalog = readFileSync(resolve(root, 'tagros/app-catalog.html'), 'utf8');
 const work = readFileSync(resolve(root, 'tagros/work.html'), 'utf8');
 const workspace = readFileSync(resolve(root, 'tagros/work-space.js'), 'utf8');
-const serviceCore = readFileSync(resolve(root, 'tagros/service-core.js'), 'utf8');
+const workOrderForm = readFileSync(resolve(root, 'tagros/work-order-form.js'), 'utf8');
 const css = readFileSync(resolve(root, 'tagros/os-shell.css'), 'utf8');
 
 const checks = [];
@@ -30,7 +30,7 @@ check(workspace.includes('...(item.aliases || [])') && workspace.includes('data-
 check(workspace.includes('const primaryName = workshopName || officialName') && workspace.includes('Official STIHL:'), 'bench prefers TAGRO workshop names with STIHL reference');
 check(catalog.includes("'<small>TAGRO: '") && catalog.includes('Needs TAGRO Name'), 'global catalog keeps STIHL primary and supports TAGRO naming requests');
 check(worker.includes('/api/catalog/name-requests') && worker.includes('Marked for TAGRO naming'), 'TAGRO naming requests persist for admin review');
-check(serviceCore.includes("draft:row.dataset.partDraft==='1'") && serviceCore.includes('savedParts=this.parts.filter'), 'typed drafts cannot autosave as parts');
+check(workOrderForm.includes("draft:row.dataset.partDraft==='1'") && workOrderForm.includes('savedParts=this.parts.filter'), 'typed drafts cannot autosave as parts');
 check(workspace.includes('data-result-qty') && workspace.includes('addCatalogPart(items[index], quantity)'), 'quantity selection connected');
 check(css.includes('.global-assembly-carousel') && css.includes('nth-child(8)'), 'global desktop/mobile parts UI styled');
 

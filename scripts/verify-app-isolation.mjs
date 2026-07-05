@@ -74,3 +74,27 @@ for (const page of pages) {
 }
 
 console.log('Manifest navigation isolation verified: fake app appeared and disappeared on every navigation surface.');
+
+const serviceUi = fs.readFileSync(new URL('tagros/service-ui.js', root), 'utf8');
+const workOrderForm = fs.readFileSync(new URL('tagros/work-order-form.js', root), 'utf8');
+if (!serviceUi.includes('const ServiceUI=') || serviceUi.includes('WorkOrderForm')) {
+  throw new Error('service-ui.js must contain ServiceUI only');
+}
+if (!workOrderForm.includes('const WorkOrderForm=') || workOrderForm.includes('const ServiceUI=')) {
+  throw new Error('work-order-form.js must contain WorkOrderForm only');
+}
+
+for (const page of ['index.html', 'receive.html']) {
+  const html = fs.readFileSync(new URL(`tagros/${page}`, root), 'utf8');
+  if (!html.includes('service-ui.js')) throw new Error(`${page}: service-ui.js is not loaded`);
+  if (html.includes('work-space.js') || html.includes('work-order-form.js')) {
+    throw new Error(`${page}: workbench code must not be loaded`);
+  }
+}
+
+const workHtml = fs.readFileSync(new URL('tagros/work.html', root), 'utf8');
+if (!workHtml.includes('service-ui.js') || !workHtml.includes('work-order-form.js') || !workHtml.includes('work-space.js')) {
+  throw new Error('work.html must load shared UI and both workbench files');
+}
+
+console.log('Service split verified: home and intake remain independent when work-space.js is excluded.');

@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 const html = readFileSync(resolve(root, 'tagros/work.html'), 'utf8');
 const js = readFileSync(resolve(root, 'tagros/work-space.js'), 'utf8');
-const core = readFileSync(resolve(root, 'tagros/service-core.js'), 'utf8');
+const workOrderForm = readFileSync(resolve(root, 'tagros/work-order-form.js'), 'utf8');
 const css = readFileSync(resolve(root, 'tagros/work-space.css'), 'utf8');
 const sw = readFileSync(resolve(root, 'tagros/sw.js'), 'utf8');
 
@@ -17,7 +17,7 @@ function check(condition, message) {
 const htmlIds = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]));
 const referencedIds = new Set([
   ...[...js.matchAll(/getElementById\('([^']+)'\)/g)].map(match => match[1]),
-  ...[...core.matchAll(/getElementById\('([^']+)'\)/g)].map(match => match[1])
+  ...[...workOrderForm.matchAll(/getElementById\('([^']+)'\)/g)].map(match => match[1])
 ]);
 const workspaceIds = [...referencedIds].filter(id => (
   js.includes(`getElementById('${id}')`) ||
@@ -38,9 +38,9 @@ check(js.includes('/events') && js.includes('statusActions'), 'real workflow-eve
 check(js.includes('AI diagnosis is not connected yet'), 'AI capability represented honestly');
 check(css.includes('@media(max-width:760px)') && html.includes('mobile-bottom-nav'), 'mobile workspace layout');
 check(!/Rubber Biju|Jose Sawmill|Thomas Thumpassery|94470000/i.test(`${html}\n${js}`), 'no retired sample customer data');
-check(core.includes("document.dispatchEvent(new CustomEvent('tagro:parts-updated'))"), 'basket receives part updates');
-check(core.includes('data-part-hsn=') && core.includes('data-part-gst='), 'catalog tax metadata preserved');
-check(core.includes("draft:row.dataset.partDraft==='1'") && core.includes('savedParts=this.parts.filter'), 'search drafts excluded from autosave');
+check(workOrderForm.includes("document.dispatchEvent(new CustomEvent('tagro:parts-updated'))"), 'basket receives part updates');
+check(workOrderForm.includes('data-part-hsn=') && workOrderForm.includes('data-part-gst='), 'catalog tax metadata preserved');
+check(workOrderForm.includes("draft:row.dataset.partDraft==='1'") && workOrderForm.includes('savedParts=this.parts.filter'), 'search drafts excluded from autosave');
 check(js.includes('loadModelParts') && html.includes('parts-assembly-carousel'), 'model-first assembly picker connected');
 check(html.includes('bench-glance-card') && js.includes('renderBenchFacts'), 'customer and machine facts visible on the bench');
 check(html.includes('common-model-parts') && js.includes('commonModelParts'), 'model common-parts strip available');

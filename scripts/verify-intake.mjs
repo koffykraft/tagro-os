@@ -1,12 +1,12 @@
 import { readFile } from 'node:fs/promises';
 
-const [worker, migration, receive, intake, work, serviceCore, sw] = await Promise.all([
+const [worker, migration, receive, intake, work, workOrderForm, sw] = await Promise.all([
   readFile(new URL('../src/worker.js', import.meta.url), 'utf8'),
   readFile(new URL('../migrations/0009_intake_drafts.sql', import.meta.url), 'utf8'),
   readFile(new URL('../tagros/receive.html', import.meta.url), 'utf8'),
   readFile(new URL('../tagros/intake.js', import.meta.url), 'utf8'),
   readFile(new URL('../tagros/work.html', import.meta.url), 'utf8'),
-  readFile(new URL('../tagros/service-core.js', import.meta.url), 'utf8'),
+  readFile(new URL('../tagros/work-order-form.js', import.meta.url), 'utf8'),
   readFile(new URL('../tagros/sw.js', import.meta.url), 'utf8')
 ]);
 
@@ -31,7 +31,7 @@ assert(intake.includes('defaultComplaints') && intake.includes('save-complaints'
 assert(intake.includes('data-photo-type') && intake.includes('data-delete-photo'), 'Photo classification/removal controls are missing');
 assert(!work.includes("location.replace('receive.html'"), 'Work page still redirects into intake');
 assert(work.includes("WorkOrderForm.mount({mode:'edit'"), 'Existing work-order editing is not preserved');
-assert(work.includes('id="intake-photo-panel"') && serviceCore.includes('renderIntakePhotos(order.intake)'), 'Completed intake photos are not shown on the work order');
+assert(work.includes('id="intake-photo-panel"') && workOrderForm.includes('renderIntakePhotos(order.intake)'), 'Completed intake photos are not shown on the work order');
 assert(worker.includes('FROM intake_drafts WHERE job_id = ?'), 'Work-order API does not attach completed intake photos');
 assert(sw.includes("'tagro-white-v21'"), 'Service worker cache was not advanced');
 
