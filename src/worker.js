@@ -93,6 +93,9 @@ async function routeApi(request, env, url) {
     return json({ ok: true }, 200, { 'Set-Cookie': expiredSessionCookie(env) });
   }
 
+  const customerMachineResponse = await routeCustomerMachinesApi(request, env, url);
+  if (customerMachineResponse) return customerMachineResponse;
+
   if (url.pathname === '/api/customers' && request.method === 'GET') {
     const session = await getSession(request, env);
     if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
@@ -678,6 +681,187 @@ async function listCustomers(env, url) {
     loyal: Number(customer.completed_services || 0) >= 5
   }));
   return json({ ok: true, customers });
+}
+
+async function routeCustomerMachinesApi(request, env, url) {
+  if (!url.pathname.startsWith('/api/customer-machines')) return null;
+  const session = await getSession(request, env);
+  if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
+
+  if (url.pathname === '/api/customer-machines' && request.method === 'POST') {
+    return createCustomerMachine(request, env, session);
+  }
+  const transferMatch = url.pathname.match(/^\/api\/customer-machines\/([^/]+)\/owner$/);
+  if (transferMatch && request.method === 'PUT') {
+    return transferCustomerMachine(request, env, session, decodeURIComponent(transferMatch[1]));
+  }
+  const machineMatch = url.pathname.match(/^\/api\/customer-machines\/([^/]+)$/);
+  if (machineMatch && request.method === 'GET') {
+    return getCustomerMachine(env, decodeURIComponent(machineMatch[1]));
+  }
+  return json({ ok: false, error: 'Machine route not found.' }, 404);
+}
+
+async function createCustomerMachine(request, env, session) {
+  const body = await readJson(request);
+  const customerId = cleanText(body.customerId, 80);
+  const displayName = cleanText(body.model ?? body.displayName, 160);
+  const serialNumber = cleanText(body.serialNumber, 120).toUpperCase();
+  const modelId = cleanText(body.machineModelId, 80) || null;
+  const notes = cleanText(body.notes, 1000) || null;
+  if (!customerId || !displayName || !serialNumber) {
+    return json({ ok: false, error: 'Customer, machine model and serial number are required.' }, 400);
+  }
+  const [customer, duplicate] = await Promise.all([
+    env.DB.prepare(
+      `SELECT id FROM customers
+       WHERE id = ? AND active = 1 AND record_kind = 'customer'`
+    ).bind(customerId).first(),
+    env.DB.prepare(
+      `SELECT id FROM customer_machines
+       WHERE UPPER(serial_number) = ? AND active = 1 LIMIT 1`
+    ).bind(serialNumber).first()
+  ]);
+  if (!customer) return json({ ok: false, error: 'Customer not found.' }, 404);
+  if (duplicate) return json({ ok: false, error: 'A machine with this serial number already exists.' }, 409);
+  if (modelId) {
+    const model = await env.DB.prepare(
+      'SELECT id FROM machine_models WHERE id = ? AND active = 1'
+    ).bind(modelId).first();
+    if (!model) return json({ ok: false, error: 'Machine model not found.' }, 404);
+  }
+
+  const now = new Date().toISOString();
+  const machineId = makeId('customer_machine');
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO customer_machines
+        (id, customer_id, machine_model_id, display_name, serial_number, notes,
+         provisional, active, first_seen_at, last_seen_at, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`
+    ).bind(
+      machineId, customerId, modelId, displayName, serialNumber, notes,
+      modelId ? 0 : 1, now, now, session.id, now, now
+    ),
+    env.DB.prepare(
+      `INSERT INTO machine_ownership_history
+        (id, machine_id, customer_id, started_at, ended_at, transferred_by, note, created_at)
+       VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`
+    ).bind(makeId('ownership'), machineId, customerId, now, session.id, 'Machine record created', now)
+  ]);
+  return getCustomerMachine(env, machineId, 201);
+}
+
+async function transferCustomerMachine(request, env, session, machineIdValue) {
+  const machineId = cleanText(machineIdValue, 80);
+  const body = await readJson(request);
+  const customerId = cleanText(body.customerId, 80);
+  const note = cleanText(body.note, 1000) || 'Ownership transferred';
+  if (!customerId) return json({ ok: false, error: 'New customer is required.' }, 400);
+  const [machine, customer] = await Promise.all([
+    env.DB.prepare(
+      `SELECT id, customer_id FROM customer_machines
+       WHERE id = ? AND active = 1`
+    ).bind(machineId).first(),
+    env.DB.prepare(
+      `SELECT id FROM customers
+       WHERE id = ? AND active = 1 AND record_kind = 'customer'`
+    ).bind(customerId).first()
+  ]);
+  if (!machine) return json({ ok: false, error: 'Machine not found.' }, 404);
+  if (!customer) return json({ ok: false, error: 'New customer not found.' }, 404);
+  if (machine.customer_id === customerId) {
+    return json({ ok: false, error: 'This customer already owns the machine.' }, 409);
+  }
+
+  const now = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE machine_ownership_history
+       SET ended_at = ?
+       WHERE machine_id = ? AND ended_at IS NULL`
+    ).bind(now, machineId),
+    env.DB.prepare(
+      `INSERT INTO machine_ownership_history
+        (id, machine_id, customer_id, started_at, ended_at, transferred_by, note, created_at)
+       VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`
+    ).bind(makeId('ownership'), machineId, customerId, now, session.id, note, now),
+    env.DB.prepare(
+      `UPDATE customer_machines
+       SET customer_id = ?, updated_at = ?
+       WHERE id = ? AND active = 1`
+    ).bind(customerId, now, machineId)
+  ]);
+  return getCustomerMachine(env, machineId);
+}
+
+async function getCustomerMachine(env, machineIdValue, status = 200) {
+  const machineId = cleanText(machineIdValue, 80);
+  const [machineResult, jobsResult, partsResult, ownershipResult] = await env.DB.batch([
+    env.DB.prepare(
+      `SELECT cm.id, cm.customer_id, c.name AS customer_name, c.phone AS customer_phone,
+        cm.machine_model_id, cm.display_name, cm.serial_number, cm.notes, cm.provisional,
+        cm.first_seen_at, cm.last_seen_at, cm.created_at, cm.updated_at,
+        mm.model_name, mm.machine_type, mk.name AS make_name
+       FROM customer_machines cm
+       JOIN customers c ON c.id = cm.customer_id
+       LEFT JOIN machine_models mm ON mm.id = cm.machine_model_id
+       LEFT JOIN machine_makes mk ON mk.id = mm.make_id
+       WHERE cm.id = ? AND cm.active = 1`
+    ).bind(machineId),
+    env.DB.prepare(
+      `SELECT j.id, j.work_order, j.customer_id, c.name AS customer_name,
+        j.reported_problem, j.opened_at, j.updated_at,
+        (SELECT e.event_type FROM job_events e
+          WHERE e.job_id = j.id AND e.event_type <> 'note_added'
+          ORDER BY e.created_at DESC, e.id DESC LIMIT 1
+        ) AS latest_event_type
+       FROM repair_jobs j
+       JOIN customers c ON c.id = j.customer_id
+       WHERE j.customer_machine_id = ?
+       ORDER BY j.opened_at DESC, j.id DESC`
+    ).bind(machineId),
+    env.DB.prepare(
+      `SELECT wp.part_number, wp.item_name, SUM(COALESCE(wp.quantity, 0)) AS total_quantity,
+        COUNT(DISTINCT wp.job_id) AS job_count
+       FROM work_order_parts wp
+       JOIN repair_jobs j ON j.id = wp.job_id
+       WHERE j.customer_machine_id = ?
+         AND wp.part_number IS NOT NULL AND wp.part_number <> ''
+       GROUP BY wp.part_number, wp.item_name
+       ORDER BY MAX(wp.created_at) DESC`
+    ).bind(machineId),
+    env.DB.prepare(
+      `SELECT h.id, h.customer_id, c.name AS customer_name, h.started_at, h.ended_at,
+        h.note, h.transferred_by, s.name AS transferred_by_name
+       FROM machine_ownership_history h
+       JOIN customers c ON c.id = h.customer_id
+       JOIN staff s ON s.id = h.transferred_by
+       WHERE h.machine_id = ?
+       ORDER BY h.started_at DESC, h.id DESC`
+    ).bind(machineId)
+  ]);
+  const machine = machineResult.results?.[0];
+  if (!machine) return json({ ok: false, error: 'Machine not found.' }, 404);
+  const jobs = (jobsResult.results || []).map(job => {
+    const jobState = jobStatus(job.latest_event_type);
+    return { ...job, status: jobState, status_label: JOB_STATUS_LABELS[jobState] || jobState };
+  });
+  return json({
+    ok: true,
+    machine: {
+      ...machine,
+      jobs,
+      parts: partsResult.results || [],
+      complaints: jobs.map(job => ({
+        job_id: job.id,
+        work_order: job.work_order,
+        complaint: job.reported_problem,
+        opened_at: job.opened_at
+      })),
+      ownership: ownershipResult.results || []
+    }
+  }, status);
 }
 
 async function getCustomer(env, id) {
