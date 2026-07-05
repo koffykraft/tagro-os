@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>Machine History — TAGRO</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="os-shell.css">
+  <link rel="stylesheet" href="service.css">
+</head>
+<body>
+  <header class="service-header"></header>
+  <main class="service-main">
+    <div class="screen-bar">
+      <a class="back-link" href="app-customers.html" aria-label="Back">←</a>
+      <div class="screen-bar-main">
+        <div class="screen-title" id="machine-title">Machine history</div>
+        <div class="save-state" id="machine-serial">Loading record…</div>
+      </div>
+    </div>
+    <section class="history-summary" id="history-summary"></section>
+    <div class="history-layout">
+      <section class="history-panel">
+        <h2>Service visits</h2>
+        <div id="machine-jobs"><div class="empty">Loading visits…</div></div>
+      </section>
+      <section class="history-panel">
+        <h2>Parts used</h2>
+        <div id="machine-parts"><div class="empty">Loading parts…</div></div>
+      </section>
+      <section class="history-panel">
+        <h2>Complaint history</h2>
+        <div id="machine-complaints"><div class="empty">Loading complaints…</div></div>
+      </section>
+      <section class="history-panel">
+        <h2>Ownership</h2>
+        <div id="machine-ownership"><div class="empty">Loading ownership…</div></div>
+      </section>
+    </div>
+  </main>
+  <script src="os-manifest.js"></script><script src="os-core.js"></script><script src="app-shell.js"></script><script src="service-ui.js"></script>
+  <script>
+  (async()=>{
+    const session=await ServiceUI.session();if(!session)return;ServiceUI.header(session);
+    const id=new URLSearchParams(location.search).get('id');
+    if(!id){showError('Machine record was not specified.');return}
+    try{
+      const data=await Api.request('/customer-machines/'+encodeURIComponent(id)),machine=data.machine;
+      document.title=(machine.display_name||'Machine')+' — TAGRO';
+      document.getElementById('machine-title').textContent=machine.display_name||[machine.make_name,machine.model_name].filter(Boolean).join(' ')||'Machine';
+      document.getElementById('machine-serial').textContent=machine.serial_number||'Serial not recorded';
+      document.getElementById('history-summary').innerHTML=summary('Customer',machine.customer_name)+summary('Phone',machine.customer_phone)+summary('Visits',(machine.jobs||[]).length)+summary('Parts used',(machine.parts||[]).length);
+      document.getElementById('machine-jobs').innerHTML=(machine.jobs||[]).length?(machine.jobs||[]).map(job=>'<a class="history-row" href="work.html?id='+encodeURIComponent(job.id)+'"><span><strong>'+ServiceUI.esc(job.work_order)+'</strong><small>'+ServiceUI.esc(job.reported_problem||'Complaint not recorded')+'</small></span><b>'+ServiceUI.esc(job.status_label)+'</b></a>').join(''):'<div class="empty">No service visits recorded.</div>';
+      document.getElementById('machine-parts').innerHTML=(machine.parts||[]).length?(machine.parts||[]).map(part=>'<div class="history-row"><span><strong>'+ServiceUI.esc(part.item_name||part.part_number)+'</strong><small>'+ServiceUI.esc(part.part_number||'Part number not recorded')+'</small></span><b>'+ServiceUI.esc(String(part.total_quantity||0))+' used</b></div>').join(''):'<div class="empty">No parts recorded.</div>';
+      document.getElementById('machine-complaints').innerHTML=(machine.complaints||[]).length?(machine.complaints||[]).map(item=>'<a class="history-row" href="work.html?id='+encodeURIComponent(item.job_id)+'"><span><strong>'+ServiceUI.esc(item.complaint||'Complaint not recorded')+'</strong><small>'+ServiceUI.esc(ServiceUI.date(item.opened_at))+'</small></span><b>'+ServiceUI.esc(item.work_order)+'</b></a>').join(''):'<div class="empty">No complaints recorded.</div>';
+      document.getElementById('machine-ownership').innerHTML=(machine.ownership||[]).length?(machine.ownership||[]).map(item=>'<div class="history-row"><span><strong>'+ServiceUI.esc(item.customer_name)+'</strong><small>'+ServiceUI.esc(ServiceUI.date(item.started_at))+(item.ended_at?' to '+ServiceUI.esc(ServiceUI.date(item.ended_at)):' — current')+'</small></span><b>'+ServiceUI.esc(item.note||'Ownership recorded')+'</b></div>').join(''):'<div class="empty">No ownership history recorded.</div>';
+    }catch(error){showError(error.message)}
+  })();
+  function summary(label,value){return '<span><small>'+ServiceUI.esc(label)+'</small><strong>'+ServiceUI.esc(String(value||'Not recorded'))+'</strong></span>'}
+  function showError(message){document.getElementById('history-summary').innerHTML='<div class="empty">'+ServiceUI.esc(message)+'</div>';document.querySelector('.history-layout').hidden=true}
+  </script>
+</body>
+</html>

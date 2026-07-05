@@ -23,14 +23,20 @@
     <div class="filters">
       <input class="control" id="job-search" type="search" placeholder="Customer, phone, machine, serial or work order">
       <select class="control" id="status-filter" style="max-width:210px">
-        <option value="all">Every status</option>
+        <option value="active">Active jobs</option>
+        <option value="all">All history</option>
         <option value="received">Received</option>
         <option value="inspecting">Inspecting</option>
+        <option value="awaiting_approval">Awaiting approval</option>
         <option value="repairing">Repairing</option>
+        <option value="paused">Paused</option>
         <option value="waiting_parts">Waiting for parts</option>
         <option value="ready">Ready</option>
         <option value="returned">Returned</option>
       </select>
+      <input class="control" id="date-from" type="date" aria-label="From date">
+      <input class="control" id="date-to" type="date" aria-label="To date">
+      <select class="control hidden" id="mechanic-filter" aria-label="Mechanic"><option value="">Every mechanic</option></select>
     </div>
     <div class="job-list" id="job-list"><div class="empty">Loading work orders…</div></div>
   </main>
@@ -39,13 +45,18 @@
   let listSession=null,loadTimer=null;
   async function loadJobs(){
     const query=document.getElementById('job-search').value.trim(),status=document.getElementById('status-filter').value;
-    const params=new URLSearchParams({limit:'200'});if(query)params.set('query',query);if(status!=='all')params.set('status',status);
+    const params=new URLSearchParams({limit:'200'});if(query)params.set('query',query);if(!['all','active'].includes(status))params.set('status',status);
+    const dateFrom=document.getElementById('date-from').value,dateTo=document.getElementById('date-to').value,mechanic=document.getElementById('mechanic-filter').value;
+    if(dateFrom)params.set('dateFrom',dateFrom);if(dateTo)params.set('dateTo',dateTo);if(mechanic)params.set('mechanic',mechanic);
     if(new URLSearchParams(location.search).get('mine')==='1')params.set('mine','1');
     const list=document.getElementById('job-list');list.innerHTML='<div class="empty">Finding work orders…</div>';
     try{
-      const data=await Api.request('/work-orders?'+params),orders=data.workOrders||[];
+      const data=await Api.request('/work-orders?'+params);let orders=data.workOrders||[];
+      if(status==='active')orders=orders.filter(order=>!['returned','cancelled'].includes(order.status));
       document.getElementById('list-count').textContent=orders.length+' work order'+(orders.length===1?'':'s');
-      list.innerHTML=orders.length?orders.map(order=>ServiceUI.jobCard(order)).join(''):'<div class="empty">Nothing matches this search.</div>';
+      const statusOrder=['received','inspecting','awaiting_approval','repairing','paused','waiting_parts','ready','returned','cancelled'];
+      const groups=statusOrder.map(key=>[key,orders.filter(item=>item.status===key)]).filter(([,items])=>items.length);
+      list.innerHTML=groups.length?groups.map(([,items])=>'<section class="job-group"><div class="job-group-head"><h2>'+ServiceUI.esc(items[0].statusLabel)+'</h2><span>'+items.length+'</span></div>'+items.map(item=>ServiceUI.jobCard(item)).join('')+'</section>').join(''):'<div class="empty">Nothing matches this search.</div>';
     }catch(error){list.innerHTML='<div class="empty">'+ServiceUI.esc(error.message)+'</div>'}
   }
   (async()=>{
@@ -54,8 +65,9 @@
     if(params.get('query'))document.getElementById('job-search').value=params.get('query');
     if(params.get('mine')==='1'){document.getElementById('list-title').textContent='My bench';document.title='My Bench — TAGRO'}
     if(params.get('status'))document.getElementById('status-filter').value=params.get('status');
+    if(['manager','owner'].includes(String(listSession.role).toLowerCase())){const select=document.getElementById('mechanic-filter');try{const data=await Api.request('/staff');select.innerHTML='<option value="">Every mechanic</option>'+(data.staff||[]).filter(item=>item.active!==0).map(item=>'<option value="'+ServiceUI.esc(item.id)+'">'+ServiceUI.esc(item.name)+'</option>').join('');select.classList.remove('hidden')}catch{}}
     document.getElementById('job-search').addEventListener('input',()=>{clearTimeout(loadTimer);loadTimer=setTimeout(loadJobs,350)});
-    document.getElementById('status-filter').addEventListener('change',loadJobs);await loadJobs();
+    ['status-filter','date-from','date-to','mechanic-filter'].forEach(id=>document.getElementById(id).addEventListener('change',loadJobs));await loadJobs();
   })();
   </script>
 </body>

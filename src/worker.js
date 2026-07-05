@@ -2792,6 +2792,9 @@ async function resolveWorkOrderBranch(env, session, requestedBranchId) {
 async function listWorkOrders(env, session, url) {
   const query = cleanText(url.searchParams.get('query'), 120);
   const statusFilter = cleanText(url.searchParams.get('status'), 40).toLowerCase();
+  const dateFrom = cleanText(url.searchParams.get('dateFrom'), 10);
+  const dateTo = cleanText(url.searchParams.get('dateTo'), 10);
+  const mechanicId = cleanText(url.searchParams.get('mechanic'), 80);
   const mine = url.searchParams.get('mine') === '1';
   const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 120, 1), 250);
   const conditions = [];
@@ -2803,6 +2806,21 @@ async function listWorkOrders(env, session, url) {
   if (mine) {
     conditions.push('d.assigned_to = ?');
     values.push(session.id);
+  }
+  if (mechanicId) {
+    if (!hasRole(session, 'manager', 'owner') && mechanicId !== session.id) {
+      return json({ ok: false, error: 'Mechanic history filtering is restricted.' }, 403);
+    }
+    conditions.push('d.assigned_to = ?');
+    values.push(mechanicId);
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateFrom)) {
+    conditions.push('SUBSTR(j.opened_at, 1, 10) >= ?');
+    values.push(dateFrom);
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+    conditions.push('SUBSTR(j.opened_at, 1, 10) <= ?');
+    values.push(dateTo);
   }
   if (query) {
     const like = `%${query}%`;

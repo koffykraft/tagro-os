@@ -2,6 +2,7 @@ const ServiceUI={
   esc(value){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]))},
   date(value){if(!value)return'';return new Date(value).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'})},
   shortDate(value){if(!value)return'';return new Date(value).toLocaleDateString('en-IN',{day:'numeric',month:'short'})},
+  age(value){const time=new Date(value).getTime();if(!Number.isFinite(time))return'';const days=Math.max(0,Math.floor((Date.now()-time)/86400000));return days===0?'Today':days+' day'+(days===1?'':'s')},
   money(value){return value===null||value===undefined||value===''?'':Number(value).toLocaleString('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2})},
   machine(order){return order.machineDescription||[order.makeName,order.modelName].filter(Boolean).join(' ')||'Machine details pending'},
   customer(order){return order.customerName||order.customerPhone||'Customer details pending'},
@@ -25,7 +26,7 @@ const ServiceUI={
     });
   },
   jobCard(order){
-    return '<a class="job-card" href="work.html?id='+encodeURIComponent(order.id)+'"><div class="job-main"><div class="job-title">'+this.esc(this.machine(order))+' · '+this.esc(this.customer(order))+'</div><div class="job-meta">'+this.esc(order.complaint||'Complaint can be added later')+'</div></div><div class="job-side"><div class="job-number">'+this.esc(order.workOrder)+'</div><span class="status">'+this.esc(order.statusLabel)+'</span></div></a>';
+    return '<a class="job-card" href="work.html?id='+encodeURIComponent(order.id)+'"><div class="job-main"><div class="job-title">'+this.esc(this.machine(order))+'</div><div class="job-customer">'+this.esc(this.customer(order))+'</div><div class="job-meta">'+this.esc(order.complaint||'Complaint not recorded')+'</div><div class="job-card-foot"><span>'+this.esc(this.age(order.openedAt))+'</span><span>'+this.esc(order.assignedToName||'Unassigned')+'</span></div></div><div class="job-side"><div class="job-number">'+this.esc(order.workOrder)+'</div><span class="status">'+this.esc(order.statusLabel)+'</span></div></a>';
   },
   debounce(fn,delay=500){let timer;return(...args)=>{clearTimeout(timer);timer=setTimeout(()=>fn(...args),delay)}}
 };

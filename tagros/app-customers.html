@@ -214,9 +214,9 @@ async function loadCustomerRecord(customerId) {
       '<span><strong>' + (record.loyal ? 'Loyal' : 'Regular') + '</strong><small>Customer status</small></span>';
     document.getElementById('customer-machine-list').innerHTML = (record.machines || []).length
       ? record.machines.map(machine =>
-          '<div class="customer-document-row"><span><strong>' + OS.esc(machine.display_name) + '</strong><small>' +
+          '<a class="customer-document-row" href="machine-history.html?id=' + encodeURIComponent(machine.id) + '"><span><strong>' + OS.esc(machine.display_name) + '</strong><small>' +
           OS.esc(machine.serial_number || 'Serial not recorded') + '</small></span><b>' +
-          OS.esc(String(machine.repair_count || 0)) + ' visits</b></div>'
+          OS.esc(String(machine.repair_count || 0)) + ' visits</b></a>'
         ).join('')
       : '<span class="document-status">No machines recorded.</span>';
     document.getElementById('customer-job-list').innerHTML = (record.jobs || []).length

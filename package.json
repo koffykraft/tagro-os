@@ -12,6 +12,8 @@
     "verify:machines": "node scripts/verify-machine-records.mjs",
     "verify:lifecycle": "node scripts/verify-service-lifecycle.mjs",
     "verify:estimate": "node scripts/verify-estimate.mjs",
+    "verify:bench": "node scripts/verify-bench.mjs",
+    "verify:history": "node scripts/verify-history.mjs",
     "verify:workspace": "node scripts/verify-workspace.mjs",
     "verify:parts": "node scripts/verify-parts-workflow.mjs",
     "deploy": "wrangler deploy --env=\"\" --strict",
