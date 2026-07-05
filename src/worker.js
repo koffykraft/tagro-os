@@ -18,6 +18,9 @@ const CUSTOMER_DOCUMENT_FIELDS = Object.freeze([
 const CUSTOMER_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
 const CUSTOMER_DOCUMENT_TOTAL_MAX_BYTES = 25 * 1024 * 1024;
 const CUSTOMER_DOCUMENT_MAX_FILES = 12;
+const INTAKE_PHOTO_MAX_BYTES = 10 * 1024 * 1024;
+const INTAKE_PHOTO_MAX_FILES = 8;
+const INTAKE_PHOTO_TYPES = new Set(['service_sheet', 'machine', 'serial_plate', 'damage', 'other']);
 
 export default {
   async fetch(request, env) {
@@ -278,6 +281,92 @@ async function routeApi(request, env, url) {
     if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
     if (!hasRole(session, 'manager', 'owner')) return json({ ok: false, error: 'Access restricted.' }, 403);
     return createServiceType(request, env);
+  }
+
+  if (url.pathname === '/api/intake-drafts' && request.method === 'GET') {
+    const session = await getSession(request, env);
+    if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
+    return listIntakeDrafts(env, session, url);
+  }
+
+  if (url.pathname === '/api/intake-drafts' && request.method === 'POST') {
+    const session = await getSession(request, env);
+    if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
+    return createIntakeDraft(request, env, session);
+  }
+
+  const intakePhotoMatch = url.pathname.match(/^\/api\/intake-drafts\/([^/]+)\/photos\/([^/]+)$/);
+  if (intakePhotoMatch && request.method === 'GET') {
+    const session = await getSession(request, env);
+    if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
+    return downloadIntakePhoto(
+      env,
+      session,
+      decodeURIComponent(intakePhotoMatch[1]),
+      decodeURIComponent(intakePhotoMatch[2])
+    );
+  }
+  if (intakePhotoMatch && request.method === 'PUT') {
+    const session = await getSession(request, env);
+    if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
+    return updateIntakePhoto(
+      request,
+      env,
+      session,
+      decodeURIComponent(intakePhotoMatch[1]),
+      decodeURIComponent(intakePhotoMatch[2])
+    );
+  }
+  if (intakePhotoMatch && request.method === 'DELETE') {
+    const session = await getSession(request, env);
+    if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
+    return deleteIntakePhoto(
+      env,
+      session,
+      decodeURIComponent(intakePhotoMatch[1]),
+      decodeURIComponent(intakePhotoMatch[2])
+    );
+  }
+
+  const intakePhotosMatch = url.pathname.match(/^\/api\/intake-drafts\/([^/]+)\/photos$/);
+  if (intakePhotosMatch && request.method === 'POST') {
+    const session = await getSession(request, env);
+    if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
+    return uploadIntakePhoto(
+      request,
+      env,
+      session,
+      decodeURIComponent(intakePhotosMatch[1])
+    );
+  }
+
+  const intakeCompleteMatch = url.pathname.match(/^\/api\/intake-drafts\/([^/]+)\/complete$/);
+  if (intakeCompleteMatch && request.method === 'POST') {
+    const session = await getSession(request, env);
+    if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
+    return completeIntakeDraft(
+      request,
+      env,
+      session,
+      decodeURIComponent(intakeCompleteMatch[1])
+    );
+  }
+
+  const intakeDraftMatch = url.pathname.match(/^\/api\/intake-drafts\/([^/]+)$/);
+  if (intakeDraftMatch && request.method === 'GET') {
+    const session = await getSession(request, env);
+    if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
+    return getIntakeDraft(env, session, decodeURIComponent(intakeDraftMatch[1]));
+  }
+  if (intakeDraftMatch && request.method === 'PUT') {
+    const session = await getSession(request, env);
+    if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
+    return updateIntakeDraft(
+      request,
+      env,
+      session,
+      decodeURIComponent(intakeDraftMatch[1])
+    );
   }
 
   const serviceTypeMatch = url.pathname.match(/^\/api\/service-types\/([^/]+)$/);
@@ -1857,6 +1946,348 @@ function optionalInteger(value) {
   return Number.isInteger(number) ? number : NaN;
 }
 
+async function listIntakeDrafts(env, session, url) {
+  const requestedStatus = cleanText(url.searchParams.get('status'), 30).toLowerCase();
+  const allowedStatuses = new Set(['draft', 'needs_review', 'ready', 'completed', 'cancelled']);
+  const conditions = [];
+  const values = [];
+  if (!hasRole(session, 'owner')) {
+    conditions.push('d.branch_id = ?');
+    values.push(session.branch_id);
+  }
+  if (requestedStatus && allowedStatuses.has(requestedStatus)) {
+    conditions.push('d.status = ?');
+    values.push(requestedStatus);
+  } else {
+    conditions.push(`d.status NOT IN ('completed', 'cancelled')`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const result = await env.DB.prepare(
+    `${intakeDraftSelect()}
+     ${where}
+     ORDER BY d.updated_at DESC
+     LIMIT 100`
+  ).bind(...values).all();
+  return json({ ok: true, drafts: (result.results || []).map(publicIntakeDraft) });
+}
+
+async function createIntakeDraft(request, env, session) {
+  const body = await readJson(request);
+  const input = intakeDraftInput(body);
+  const validation = validateWorkOrderInput(input);
+  if (validation) return json({ ok: false, error: validation }, 400);
+  const branch = await resolveWorkOrderBranch(env, session, body.branchId);
+  if (!branch) return json({ ok: false, error: 'Branch not found.' }, 404);
+  const now = new Date().toISOString();
+  const id = makeId('intake');
+  await env.DB.prepare(
+    `INSERT INTO intake_drafts
+      (id, branch_id, created_by, assigned_to, status, extraction_status,
+       customer_id, customer_name, customer_phone, customer_place,
+       machine_model_id, machine_description, serial_number, complaint,
+       accessories_json, job_id, created_at, updated_at)
+     VALUES (?, ?, ?, NULL, 'draft', 'not_configured', ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`
+  ).bind(
+    id, branch.id, session.id,
+    input.customerId, input.customerName, input.customerPhone, input.customerPlace,
+    input.machineModelId, input.machineDescription, input.serialNumber, input.complaint,
+    JSON.stringify(input.accessories), now, now
+  ).run();
+  return getIntakeDraft(env, session, id, 201);
+}
+
+async function getIntakeDraft(env, session, id, successStatus = 200) {
+  const draft = await getIntakeDraftRecord(env, session, id);
+  if (draft instanceof Response) return draft;
+  const photosResult = await env.DB.prepare(
+    `SELECT id, draft_id, original_filename, photo_type, content_type, size_bytes,
+      checksum_sha256, r2_etag, uploaded_by, created_at
+     FROM intake_photos WHERE draft_id = ? ORDER BY created_at, id`
+  ).bind(draft.id).all();
+  return json({
+    ok: true,
+    draft: {
+      ...publicIntakeDraft(draft),
+      photos: (photosResult.results || []).map(photo => publicIntakePhoto(photo, draft.id))
+    }
+  }, successStatus);
+}
+
+async function updateIntakeDraft(request, env, session, id) {
+  const draft = await getIntakeDraftRecord(env, session, id);
+  if (draft instanceof Response) return draft;
+  if (draft.status === 'completed') {
+    return json({ ok: false, error: 'This intake has already created a work order.' }, 409);
+  }
+  const body = await readJson(request);
+  const input = intakeDraftInput(body);
+  const validation = validateWorkOrderInput(input);
+  if (validation) return json({ ok: false, error: validation }, 400);
+  const allowedStatuses = new Set(['draft', 'needs_review', 'ready', 'cancelled']);
+  const status = allowedStatuses.has(cleanText(body.status, 30).toLowerCase())
+    ? cleanText(body.status, 30).toLowerCase()
+    : draft.status;
+  let assignedTo = draft.assigned_to || null;
+  if (hasRole(session, 'manager', 'owner') && Object.hasOwn(body, 'assignedTo')) {
+    assignedTo = cleanText(body.assignedTo, 80) || null;
+    if (assignedTo) {
+      const assignee = await env.DB.prepare(
+        'SELECT id, branch_id FROM staff WHERE id = ? AND active = 1'
+      ).bind(assignedTo).first();
+      if (!assignee || assignee.branch_id !== draft.branch_id) {
+        return json({ ok: false, error: 'Reviewer is not available for this branch.' }, 400);
+      }
+    }
+  }
+  const updatedAt = new Date().toISOString();
+  await env.DB.prepare(
+    `UPDATE intake_drafts SET
+      assigned_to = ?, status = ?, customer_id = ?, customer_name = ?,
+      customer_phone = ?, customer_place = ?, machine_model_id = ?,
+      machine_description = ?, serial_number = ?, complaint = ?,
+      accessories_json = ?, updated_at = ?
+     WHERE id = ?`
+  ).bind(
+    assignedTo, status, input.customerId, input.customerName, input.customerPhone,
+    input.customerPlace, input.machineModelId, input.machineDescription,
+    input.serialNumber, input.complaint, JSON.stringify(input.accessories),
+    updatedAt, draft.id
+  ).run();
+  return getIntakeDraft(env, session, draft.id);
+}
+
+async function uploadIntakePhoto(request, env, session, id) {
+  if (!env.DOCS) return json({ ok: false, error: 'Intake photo storage is not configured.' }, 503);
+  const draft = await getIntakeDraftRecord(env, session, id);
+  if (draft instanceof Response) return draft;
+  if (draft.status === 'completed' || draft.status === 'cancelled') {
+    return json({ ok: false, error: 'This intake no longer accepts photos.' }, 409);
+  }
+  const countRow = await env.DB.prepare(
+    'SELECT COUNT(*) AS photo_count FROM intake_photos WHERE draft_id = ?'
+  ).bind(draft.id).first();
+  if (Number(countRow?.photo_count || 0) >= INTAKE_PHOTO_MAX_FILES) {
+    return json({ ok: false, error: `An intake can contain up to ${INTAKE_PHOTO_MAX_FILES} photos.` }, 413);
+  }
+  let formData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return json({ ok: false, error: 'The photo upload could not be read.' }, 400);
+  }
+  const file = formData.get('photo');
+  if (!isUploadedFile(file) || file.size === 0) {
+    return json({ ok: false, error: 'Choose a photo to upload.' }, 400);
+  }
+  if (file.size > INTAKE_PHOTO_MAX_BYTES) {
+    return json({ ok: false, error: 'Each intake photo must be 10 MB or smaller.' }, 413);
+  }
+  if (!file.name || file.name.length > 180) {
+    return json({ ok: false, error: 'The photo must have a valid filename.' }, 400);
+  }
+  const requestedType = cleanText(formData.get('photoType'), 30).toLowerCase();
+  const photoType = INTAKE_PHOTO_TYPES.has(requestedType) ? requestedType : 'other';
+  const buffer = await file.arrayBuffer();
+  const detectedType = detectDocumentContentType(buffer);
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(detectedType)) {
+    return json({ ok: false, error: 'Intake photos must be JPEG, PNG, or WebP images.' }, 415);
+  }
+  const claimedType = String(file.type || '').toLowerCase();
+  if (claimedType && claimedType !== 'application/octet-stream' && claimedType !== detectedType) {
+    return json({ ok: false, error: 'The photo content does not match its declared file type.' }, 415);
+  }
+  const photoId = makeId('intake_photo');
+  const filename = safeDocumentFilename(file.name);
+  const r2Key = `intake/${draft.branch_code}/${draft.id}/${photoId}-${filename}`;
+  const checksum = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', buffer)));
+  const stored = await env.DOCS.put(r2Key, buffer, {
+    httpMetadata: {
+      contentType: detectedType,
+      contentDisposition: `inline; filename="${safeDocumentFilename(filename).replace(/[^\x20-\x7e]/g, '_')}"`
+    }
+  });
+  if (!stored) return json({ ok: false, error: 'Photo storage rejected the upload.' }, 502);
+  const now = new Date().toISOString();
+  try {
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO intake_photos
+          (id, draft_id, r2_key, original_filename, photo_type, content_type,
+           size_bytes, checksum_sha256, r2_etag, uploaded_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        photoId, draft.id, r2Key, filename, photoType, detectedType, file.size,
+        checksum, stored.etag || null, session.id, now
+      ),
+      env.DB.prepare(
+        `UPDATE intake_drafts
+         SET status = 'needs_review', extraction_status = 'not_configured', updated_at = ?
+         WHERE id = ?`
+      ).bind(now, draft.id)
+    ]);
+  } catch (error) {
+    await env.DOCS.delete(r2Key);
+    throw error;
+  }
+  return getIntakeDraft(env, session, draft.id, 201);
+}
+
+async function updateIntakePhoto(request, env, session, draftId, photoId) {
+  const draft = await getIntakeDraftRecord(env, session, draftId);
+  if (draft instanceof Response) return draft;
+  if (draft.status === 'completed' || draft.status === 'cancelled') {
+    return json({ ok: false, error: 'This intake photo can no longer be changed.' }, 409);
+  }
+  const body = await readJson(request);
+  const photoType = cleanText(body.photoType, 30).toLowerCase();
+  if (!INTAKE_PHOTO_TYPES.has(photoType)) {
+    return json({ ok: false, error: 'Select a valid photo type.' }, 400);
+  }
+  const result = await env.DB.prepare(
+    'UPDATE intake_photos SET photo_type = ? WHERE id = ? AND draft_id = ?'
+  ).bind(photoType, cleanText(photoId, 90), draft.id).run();
+  if (!result.meta?.changes) return json({ ok: false, error: 'Intake photo not found.' }, 404);
+  await env.DB.prepare('UPDATE intake_drafts SET updated_at = ? WHERE id = ?')
+    .bind(new Date().toISOString(), draft.id).run();
+  return getIntakeDraft(env, session, draft.id);
+}
+
+async function deleteIntakePhoto(env, session, draftId, photoId) {
+  if (!env.DOCS) return json({ ok: false, error: 'Intake photo storage is not configured.' }, 503);
+  const draft = await getIntakeDraftRecord(env, session, draftId);
+  if (draft instanceof Response) return draft;
+  if (draft.status === 'completed' || draft.status === 'cancelled') {
+    return json({ ok: false, error: 'This intake photo can no longer be removed.' }, 409);
+  }
+  const photo = await env.DB.prepare(
+    'SELECT id, r2_key FROM intake_photos WHERE id = ? AND draft_id = ?'
+  ).bind(cleanText(photoId, 90), draft.id).first();
+  if (!photo) return json({ ok: false, error: 'Intake photo not found.' }, 404);
+  await env.DOCS.delete(photo.r2_key);
+  const now = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM intake_photos WHERE id = ? AND draft_id = ?').bind(photo.id, draft.id),
+    env.DB.prepare('UPDATE intake_drafts SET updated_at = ? WHERE id = ?').bind(now, draft.id)
+  ]);
+  return getIntakeDraft(env, session, draft.id);
+}
+
+async function downloadIntakePhoto(env, session, draftId, photoId) {
+  if (!env.DOCS) return json({ ok: false, error: 'Intake photo storage is not configured.' }, 503);
+  const draft = await getIntakeDraftRecord(env, session, draftId);
+  if (draft instanceof Response) return draft;
+  const photo = await env.DB.prepare(
+    `SELECT id, r2_key, original_filename, content_type
+     FROM intake_photos WHERE id = ? AND draft_id = ?`
+  ).bind(cleanText(photoId, 90), draft.id).first();
+  if (!photo) return json({ ok: false, error: 'Intake photo not found.' }, 404);
+  const object = await env.DOCS.get(photo.r2_key);
+  if (!object) return json({ ok: false, error: 'The stored intake photo is unavailable.' }, 410);
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('Content-Type', photo.content_type);
+  headers.set('Content-Disposition', `inline; filename="${safeDocumentFilename(photo.original_filename).replace(/[^\x20-\x7e]/g, '_')}"`);
+  headers.set('Cache-Control', 'private, no-store');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  return new Response(object.body, { headers });
+}
+
+async function completeIntakeDraft(request, env, session, id) {
+  const draft = await getIntakeDraftRecord(env, session, id);
+  if (draft instanceof Response) return draft;
+  if (draft.job_id) return getWorkOrder(env, session, draft.job_id);
+  if (draft.status === 'cancelled') {
+    return json({ ok: false, error: 'A cancelled intake cannot create a work order.' }, 409);
+  }
+  const body = await readJson(request);
+  return createWorkOrderFromBody({
+    ...body,
+    branchId: draft.branch_id,
+    customerId: body.customerId ?? draft.customer_id,
+    customerName: body.customerName ?? draft.customer_name,
+    customerPhone: body.customerPhone ?? draft.customer_phone,
+    customerPlace: body.customerPlace ?? draft.customer_place,
+    machineModelId: body.machineModelId ?? draft.machine_model_id,
+    machineDescription: body.machineDescription ?? draft.machine_description,
+    serialNumber: body.serialNumber ?? draft.serial_number,
+    complaint: body.complaint ?? draft.complaint,
+    accessories: body.accessories ?? parseJsonArray(draft.accessories_json)
+  }, env, session, draft);
+}
+
+function intakeDraftInput(body) {
+  return workOrderInput(body && typeof body === 'object' ? body : {});
+}
+
+function intakeDraftSelect() {
+  return `SELECT d.id, d.branch_id, b.code AS branch_code, b.name AS branch_name,
+    d.created_by, creator.name AS created_by_name, d.assigned_to,
+    reviewer.name AS assigned_to_name, d.status, d.extraction_status,
+    d.customer_id, d.customer_name, d.customer_phone, d.customer_place,
+    d.machine_model_id, d.machine_description, d.serial_number, d.complaint,
+    d.accessories_json, d.job_id, d.created_at, d.updated_at,
+    (SELECT COUNT(*) FROM intake_photos p WHERE p.draft_id = d.id) AS photo_count
+   FROM intake_drafts d
+   JOIN branches b ON b.id = d.branch_id
+   JOIN staff creator ON creator.id = d.created_by
+   LEFT JOIN staff reviewer ON reviewer.id = d.assigned_to`;
+}
+
+async function getIntakeDraftRecord(env, session, id) {
+  const draftId = cleanText(id, 90);
+  const draft = await env.DB.prepare(
+    `${intakeDraftSelect()} WHERE d.id = ?`
+  ).bind(draftId).first();
+  if (!draft) return json({ ok: false, error: 'Intake draft not found.' }, 404);
+  if (!hasRole(session, 'owner') && draft.branch_id !== session.branch_id) {
+    return json({ ok: false, error: 'This intake belongs to another branch.' }, 403);
+  }
+  return draft;
+}
+
+function publicIntakeDraft(draft) {
+  return {
+    id: draft.id,
+    branchId: draft.branch_id,
+    branchCode: draft.branch_code,
+    branchName: draft.branch_name,
+    createdBy: draft.created_by,
+    createdByName: draft.created_by_name,
+    assignedTo: draft.assigned_to || null,
+    assignedToName: draft.assigned_to_name || '',
+    status: draft.status,
+    extractionStatus: draft.extraction_status,
+    customerId: draft.customer_id || null,
+    customerName: draft.customer_name || '',
+    customerPhone: draft.customer_phone || '',
+    customerPlace: draft.customer_place || '',
+    machineModelId: draft.machine_model_id || null,
+    machineDescription: draft.machine_description || '',
+    serialNumber: draft.serial_number || '',
+    complaint: draft.complaint || '',
+    accessories: parseJsonArray(draft.accessories_json),
+    jobId: draft.job_id || null,
+    photoCount: Number(draft.photo_count || 0),
+    createdAt: draft.created_at,
+    updatedAt: draft.updated_at
+  };
+}
+
+function publicIntakePhoto(photo, draftId) {
+  return {
+    id: photo.id,
+    draftId: photo.draft_id || draftId,
+    originalFilename: photo.original_filename,
+    photoType: photo.photo_type,
+    contentType: photo.content_type,
+    sizeBytes: Number(photo.size_bytes || 0),
+    checksumSha256: photo.checksum_sha256,
+    uploadedBy: photo.uploaded_by,
+    createdAt: photo.created_at,
+    url: `/api/intake-drafts/${encodeURIComponent(draftId)}/photos/${encodeURIComponent(photo.id)}`
+  };
+}
+
 const JOB_EVENT_STATUS = {
   machine_received: 'received',
   inspection_started: 'inspecting',
@@ -2065,6 +2496,10 @@ async function listWorkOrders(env, session, url) {
 
 async function createWorkOrder(request, env, session) {
   const body = await readJson(request);
+  return createWorkOrderFromBody(body, env, session);
+}
+
+async function createWorkOrderFromBody(body, env, session, intakeDraft = null) {
   const input = workOrderInput(body);
   const validation = validateWorkOrderInput(input);
   if (validation) return json({ ok: false, error: validation }, 400);
@@ -2172,7 +2607,39 @@ async function createWorkOrder(request, env, session) {
     ).bind(makeId('event'), jobId, eventData, session.id, now, now),
     ...vanillaPartStatements(env, jobId, input.parts, now)
   );
-  await env.DB.batch(statements);
+  if (intakeDraft) {
+    statements.push(
+      env.DB.prepare(
+        `INSERT INTO intake_draft_completions
+          (draft_id, job_id, completed_by, completed_at)
+         VALUES (?, ?, ?, ?)`
+      ).bind(intakeDraft.id, jobId, session.id, now),
+      env.DB.prepare(
+        `UPDATE intake_drafts
+         SET status = 'completed', job_id = ?, customer_id = ?, customer_name = ?,
+           customer_phone = ?, customer_place = ?, machine_model_id = ?,
+           machine_description = ?, serial_number = ?, complaint = ?,
+           accessories_json = ?, updated_at = ?
+         WHERE id = ? AND job_id IS NULL`
+      ).bind(
+        jobId, customerId, input.customerName, input.customerPhone,
+        input.customerPlace, input.machineModelId, input.machineDescription,
+        input.serialNumber, input.complaint, JSON.stringify(input.accessories),
+        now, intakeDraft.id
+      )
+    );
+  }
+  try {
+    await env.DB.batch(statements);
+  } catch (error) {
+    if (intakeDraft) {
+      const completed = await env.DB.prepare(
+        'SELECT job_id FROM intake_draft_completions WHERE draft_id = ?'
+      ).bind(intakeDraft.id).first();
+      if (completed?.job_id) return getWorkOrder(env, session, completed.job_id);
+    }
+    throw error;
+  }
   return getWorkOrder(env, session, jobId, 201);
 }
 
@@ -2224,12 +2691,32 @@ async function getWorkOrder(env, session, id, successStatus = 200) {
      FROM job_events e JOIN staff s ON s.id = e.created_by
      WHERE e.job_id = ? ORDER BY e.created_at, e.id`
   ).bind(jobId).all();
+  const intakeDraft = await env.DB.prepare(
+    `SELECT id, extraction_status, created_at, updated_at
+     FROM intake_drafts WHERE job_id = ?`
+  ).bind(jobId).first();
+  let intake = null;
+  if (intakeDraft) {
+    const intakePhotos = await env.DB.prepare(
+      `SELECT id, draft_id, original_filename, photo_type, content_type, size_bytes,
+        checksum_sha256, uploaded_by, created_at
+       FROM intake_photos WHERE draft_id = ? ORDER BY created_at, id`
+    ).bind(intakeDraft.id).all();
+    intake = {
+      id: intakeDraft.id,
+      extractionStatus: intakeDraft.extraction_status,
+      createdAt: intakeDraft.created_at,
+      updatedAt: intakeDraft.updated_at,
+      photos: (intakePhotos.results || []).map(photo => publicIntakePhoto(photo, intakeDraft.id))
+    };
+  }
   return json({
     ok: true,
     workOrder: {
       ...publicVanillaWorkOrder(row),
       parts: partsResult.results || [],
-      events: (eventsResult.results || []).map(publicJobEvent)
+      events: (eventsResult.results || []).map(publicJobEvent),
+      intake
     }
   }, successStatus);
 }

@@ -4,109 +4,198 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#ffffff">
-  <title>Receive Machine — TAGRO</title>
+  <title>New Intake — TAGRO</title>
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="os-shell.css">
   <link rel="stylesheet" href="service.css">
+  <link rel="stylesheet" href="intake.css">
 </head>
-<body>
+<body class="intake-page">
   <header class="service-header"></header>
-  <main class="service-main">
-    <div class="screen-bar">
-      <a class="back-link" href="index.html" aria-label="Back">←</a>
-      <div class="screen-bar-main">
-        <div class="screen-title" id="screen-title">Receive machine</div>
-        <div class="save-state" id="screen-subtitle">Start anywhere. Nothing below is compulsory.</div>
+  <nav class="intake-top-nav" aria-label="Workshop navigation">
+    <a href="index.html">My Space</a>
+    <a href="bench.html">My Bench</a>
+    <a href="app-jobs.html">Jobs</a>
+    <a class="active" href="receive.html" aria-current="page">Receive</a>
+    <a href="app-catalog.html">Parts</a>
+  </nav>
+
+  <main class="service-main intake-main">
+    <div class="intake-heading">
+      <div>
+        <a class="intake-back" href="index.html">← My Space</a>
+        <h1>New Intake</h1>
+        <p>Photograph the service sheet and machine, review the details, then create the job.</p>
+      </div>
+      <button class="outline-button" id="open-inbox" type="button">Intake inbox <span id="inbox-count">0</span></button>
+    </div>
+
+    <ol class="intake-steps" aria-label="Intake progress">
+      <li class="active" data-step-indicator="photos"><span>1</span>Photos</li>
+      <li data-step-indicator="review"><span>2</span>Review details</li>
+      <li data-step-indicator="create"><span>3</span>Create job</li>
+    </ol>
+
+    <div class="intake-notice" id="reading-notice">
+      <span aria-hidden="true">i</span>
+      <div>
+        <strong>Automatic photo reading is not connected yet.</strong>
+        <p>Original photos are stored with this intake. Review or type the details before creating the job.</p>
       </div>
     </div>
-    <form id="work-order-form">
-      <div class="work-grid">
-        <section class="work-panel">
-          <div class="panel-head"><span class="panel-number">1</span><span class="panel-title">Customer</span><span class="panel-hint">Optional now</span></div>
-          <div class="panel-body">
+
+    <form id="intake-form">
+      <div class="intake-layout">
+        <section class="intake-card photo-card" aria-labelledby="photos-title">
+          <div class="intake-card-head">
+            <div>
+              <h2 id="photos-title">Add intake photos</h2>
+              <p>One service sheet plus machine, serial plate or damage photos as needed.</p>
+            </div>
+            <span class="draft-state" id="draft-state">Not saved</span>
+          </div>
+
+          <div class="photo-actions">
+            <button class="photo-action primary" id="take-photo" type="button">
+              <span aria-hidden="true">▣</span>
+              <strong>Take photos</strong>
+              <small>Use phone camera</small>
+            </button>
+            <button class="photo-action" id="upload-photo" type="button">
+              <span aria-hidden="true">▧</span>
+              <strong>Upload gallery</strong>
+              <small>Select up to 8</small>
+            </button>
+            <button class="photo-action admin-only" id="admin-add" type="button" hidden>
+              <span aria-hidden="true">＋</span>
+              <strong>Admin add</strong>
+              <small>Add on staff's behalf</small>
+            </button>
+          </div>
+          <input id="camera-input" class="hidden" type="file" accept="image/jpeg,image/png,image/webp" capture="environment">
+          <input id="gallery-input" class="hidden" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+
+          <div class="photo-progress hidden" id="photo-progress" role="status">
+            <span id="photo-progress-label">Uploading photo…</span>
+            <progress id="photo-progress-bar" max="100" value="0"></progress>
+          </div>
+
+          <div class="photo-section-head">
+            <strong>Photos attached <span id="photo-count">(0)</span></strong>
+            <button class="text-button" id="add-more" type="button">Add more</button>
+          </div>
+          <div class="intake-photo-grid" id="photo-grid">
+            <div class="intake-empty">No photos yet. Typed entry remains available.</div>
+          </div>
+
+          <div class="draft-actions">
+            <button class="outline-button" id="save-draft" type="button">Save draft & leave</button>
+            <button class="outline-button" id="start-review" type="button">Review details →</button>
+          </div>
+        </section>
+
+        <section class="intake-card review-card" aria-labelledby="review-title">
+          <div class="intake-card-head">
+            <div>
+              <h2 id="review-title">Review details</h2>
+              <p>Nothing is accepted silently. Correct or remove anything before creating the job.</p>
+            </div>
+            <span class="review-badge">Staff verified</span>
+          </div>
+
+          <div class="review-section">
+            <div class="review-section-title"><span aria-hidden="true">♙</span><strong>Customer</strong><small>Optional now</small></div>
             <div class="search-wrap">
-              <label class="quiet" for="customer-search">Find a previous customer</label>
+              <label class="field-label" for="customer-search">Find an existing customer</label>
               <input class="control" id="customer-search" autocomplete="off" placeholder="Phone, name or place">
               <div class="search-results hidden" id="customer-results"></div>
             </div>
             <div class="field-row">
-              <div class="field"><label for="customer-name">Name</label><input class="control" id="customer-name" placeholder="Can be added later"></div>
-              <div class="field"><label for="customer-phone">Phone</label><input class="control" id="customer-phone" inputmode="tel" placeholder="Can be added later"></div>
+              <label class="field">Name<input class="control" id="customer-name" autocomplete="name" placeholder="Can be added later"></label>
+              <label class="field">Phone<input class="control" id="customer-phone" inputmode="tel" autocomplete="tel" placeholder="Optional"></label>
             </div>
-            <div class="field"><label for="customer-place">Place</label><input class="control" id="customer-place" placeholder="Village, town or address"></div>
+            <label class="field">Address / Place<input class="control" id="customer-place" autocomplete="street-address" placeholder="Village, town or address"></label>
           </div>
-        </section>
 
-        <section class="work-panel">
-          <div class="panel-head"><span class="panel-number">2</span><span class="panel-title">Machine</span><span class="panel-hint">Describe it naturally</span></div>
-          <div class="panel-body">
+          <div class="review-section">
+            <div class="review-section-title"><span aria-hidden="true">⌑</span><strong>Machine</strong><small>Describe naturally</small></div>
             <div id="known-machines"></div>
-            <div class="field"><label for="machine-description">Machine</label><input class="control" id="machine-description" placeholder="Example: STIHL MS 250 chainsaw"></div>
-            <div class="field"><label for="machine-serial">Serial number</label><input class="control" id="machine-serial" placeholder="If visible"></div>
-            <div class="field"><label>Accessories received</label><div class="chip-row">
-              <button type="button" class="choice-chip" data-accessory="Guide bar">Guide bar</button>
-              <button type="button" class="choice-chip" data-accessory="Chain">Chain</button>
-              <button type="button" class="choice-chip" data-accessory="Battery">Battery</button>
-              <button type="button" class="choice-chip" data-accessory="Charger">Charger</button>
-              <button type="button" class="choice-chip" data-accessory="Loose parts">Loose parts</button>
-            </div></div>
+            <label class="field">Machine<input class="control" id="machine-description" placeholder="Brand, model and machine type"></label>
+            <label class="field">Serial number<input class="control" id="machine-serial" placeholder="If visible"></label>
           </div>
-        </section>
 
-        <section class="work-panel full">
-          <div class="panel-head"><span class="panel-number">3</span><span class="panel-title">Complaint</span><span class="panel-hint">Customer's words only</span></div>
-          <div class="panel-body">
-            <div class="chip-row complaint-choices" aria-label="Common complaints">
-              <button type="button" class="choice-chip" data-complaint="Won't Start">Won't Start</button>
-              <button type="button" class="choice-chip" data-complaint="No Power">No Power</button>
-              <button type="button" class="choice-chip" data-complaint="Chain Problem">Chain Problem</button>
-              <button type="button" class="choice-chip" data-complaint="Fuel Leak">Fuel Leak</button>
-              <button type="button" class="choice-chip" data-complaint="Engine Noise">Engine Noise</button>
-              <button type="button" class="choice-chip" data-complaint="Service">Service</button>
-              <button type="button" class="choice-chip" data-complaint="Other">Other</button>
-            </div>
-            <div class="field-row">
-              <div class="field"><label for="complaint">What does the customer say is wrong?</label><textarea class="control" id="complaint" placeholder="Choose above or type the customer's own words"></textarea></div>
-              <div class="field post-accept-field"><label for="observation">Workshop observation</label><textarea class="control" id="observation" placeholder="What reception or the mechanic notices"></textarea></div>
-            </div>
-            <div class="field post-accept-field"><label for="work-done">Work done</label><textarea class="control" id="work-done" placeholder="Can remain blank until repair begins"></textarea></div>
-            <div class="post-accept-field"><div class="section-head"><h2>Parts, if any</h2><button class="secondary-button" id="add-part" type="button">＋ Add part</button></div>
-            <div class="part-list" id="part-list"></div></div>
+          <div class="review-section">
+            <div class="review-section-title"><span aria-hidden="true">!</span><strong>Complaint</strong><button class="text-button" id="manage-complaints" type="button">Configure quick choices</button></div>
+            <div class="complaint-quick-list" id="complaint-quick-list"></div>
+            <label class="field">Customer's words<textarea class="control" id="complaint" placeholder="Choose a quick option or type exactly what the customer said"></textarea></label>
           </div>
-        </section>
 
-        <section class="work-panel full post-accept-field">
-          <div class="panel-head"><span class="panel-number">4</span><span class="panel-title">Billing information</span><span class="panel-hint">Optional and manual</span></div>
-          <div class="panel-body">
-            <div class="field-row">
-              <div class="field"><label for="billing-subtotal">Subtotal</label><input class="control" id="billing-subtotal" type="number" min="0" step=".01" placeholder="Blank"></div>
-              <div class="field"><label for="billing-tax">GST / tax</label><input class="control" id="billing-tax" type="number" min="0" step=".01" placeholder="Blank"></div>
+          <details class="accessories-picker">
+            <summary>Accessories received <span id="accessory-summary">None selected</span></summary>
+            <div class="accessory-options">
+              <label><input type="checkbox" value="Guide bar">Guide bar</label>
+              <label><input type="checkbox" value="Chain">Chain</label>
+              <label><input type="checkbox" value="Fuel present">Fuel present</label>
+              <label><input type="checkbox" value="Loose parts">Loose parts</label>
+              <label><input type="checkbox" value="Battery">Battery</label>
+              <label><input type="checkbox" value="Charger">Charger</label>
+              <label><input type="checkbox" value="Other">Other</label>
             </div>
-            <div class="field-row">
-              <div class="field"><label for="billing-total">Billing total</label><input class="control" id="billing-total" type="number" min="0" step=".01" placeholder="Blank"></div>
-              <div class="field"><label for="billing-note">Billing note</label><input class="control" id="billing-note" placeholder="Anything the billing staff should know"></div>
-            </div>
-          </div>
+          </details>
         </section>
       </div>
-      <div class="form-footer">
-        <span class="save-state" id="save-state">Accept first. Inspection, parts and billing come later.</span>
-        <button class="primary-button" id="accept-machine" type="submit">Accept machine</button>
+
+      <div class="intake-submit-bar">
+        <div>
+          <strong id="submit-title">Review before creating the job</strong>
+          <small id="submit-status">Photos and typed details can be changed until you confirm.</small>
+        </div>
+        <button class="intake-submit" id="create-job" type="submit">Confirm & create job</button>
       </div>
     </form>
   </main>
-  <script src="os-manifest.js"></script><script src="os-core.js"></script><script src="service-core.js"></script>
-  <script>
-  (async()=>{
-    const session=await ServiceUI.session();if(!session)return;ServiceUI.header(session);
-    const id=new URLSearchParams(location.search).get('id'),mode=id?'edit':'new';
-    document.querySelectorAll('.post-accept-field').forEach(node=>node.hidden=true);
-    if(mode==='edit'){
-      document.title='Work Order — TAGRO';
-      document.getElementById('accept-machine').textContent='Save now';
-    }
-    await WorkOrderForm.mount({mode,id,session});
-  })()
-  </script>
+
+  <dialog class="intake-dialog" id="complaint-dialog">
+    <form method="dialog" class="intake-dialog-card">
+      <div class="intake-dialog-head">
+        <div><h2>Quick complaint choices</h2><p>Add or remove choices for this staff account on this device.</p></div>
+        <button value="cancel" aria-label="Close">×</button>
+      </div>
+      <div class="configured-complaints" id="configured-complaints"></div>
+      <div class="add-complaint-row">
+        <input class="control" id="new-complaint" maxlength="60" placeholder="New complaint choice">
+        <button class="outline-button" id="add-complaint" type="button">Add</button>
+      </div>
+      <p class="dialog-message" id="complaint-message" role="status"></p>
+      <div class="intake-dialog-actions">
+        <button class="outline-button" id="reset-complaints" type="button">Restore defaults</button>
+        <button class="intake-submit" id="save-complaints" value="default">Save choices</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="intake-dialog inbox-dialog" id="inbox-dialog">
+    <div class="intake-dialog-card">
+      <div class="intake-dialog-head">
+        <div><h2>Intake inbox</h2><p>Resume unfinished photo or typed intakes for this branch.</p></div>
+        <button id="close-inbox" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="intake-inbox-list" id="intake-inbox-list"></div>
+    </div>
+  </dialog>
+
+  <nav class="intake-mobile-nav" aria-label="Mobile navigation">
+    <a href="index.html"><span>⌂</span>Home</a>
+    <a href="bench.html"><span>⌑</span>Bench</a>
+    <a href="app-jobs.html"><span>☷</span>Jobs</a>
+    <a href="app-catalog.html"><span>◇</span>Parts</a>
+    <a class="active" href="receive.html"><span>＋</span>Receive</a>
+  </nav>
+
+  <div class="space-toast" id="intake-toast" role="status" aria-live="polite"></div>
+  <script src="os-manifest.js"></script>
+  <script src="os-core.js"></script>
+  <script src="service-core.js"></script>
+  <script src="intake.js"></script>
 </body>
 </html>

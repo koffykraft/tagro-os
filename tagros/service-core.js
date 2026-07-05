@@ -82,9 +82,17 @@ const WorkOrderForm={
       unitPrice:part.unit_price??'',hsnSac:part.hsn_sac||'',gstRate:part.gst_rate??'',notes:part.notes||''
     }));
     this.renderParts();
+    this.renderIntakePhotos(order.intake);
     document.getElementById('screen-title').textContent=order.workOrder;
     document.getElementById('screen-subtitle').textContent=ServiceUI.date(order.openedAt)+' · accepted by '+(order.openedByName||'staff');
     this.setState('All changes are saved automatically.','good');
+  },
+  renderIntakePhotos(intake){
+    const panel=document.getElementById('intake-photo-panel'),host=document.getElementById('work-intake-photos');
+    if(!panel||!host)return;
+    const photos=intake?.photos||[];
+    panel.hidden=!photos.length;
+    host.innerHTML=photos.map(photo=>'<a class="work-intake-photo" href="'+ServiceUI.esc(photo.url)+'" target="_blank" rel="noopener"><img src="'+ServiceUI.esc(photo.url)+'" alt="'+ServiceUI.esc(photo.photoType||'Intake photo')+'" loading="lazy"><span>'+ServiceUI.esc(String(photo.photoType||'photo').replaceAll('_',' '))+'</span></a>').join('');
   },
   value(id){return document.getElementById(id).value.trim()},
   payload(){
