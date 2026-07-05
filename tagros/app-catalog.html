@@ -8,22 +8,26 @@
 <body>
 <header class="app-topbar"><a class="back-button" href="index.html" aria-label="Back to applications">‹</a><div class="app-topbar-title"><strong>Items & Parts</strong><span>Sale and service catalog</span></div><a class="brand-logo" href="index.html"><img src="tagro-logo.png" alt="TAGRO"></a></header>
 <main class="app-workspace">
-  <section class="page-heading"><div><p class="eyebrow">Master catalog</p><h1>Every item, properly identified.</h1><p>Part number, item name, HSN/SAC and GST are always required. Prices may remain blank.</p></div><div class="heading-actions"><button class="secondary-button" id="cloud-library" type="button">Cloud parts library</button><button class="secondary-button orange" id="new-item" type="button">+ New item</button></div></section>
+  <section class="page-heading"><div><p class="eyebrow">Model-first parts workspace</p><h1>Choose the machine, then recognise the part.</h1><p>Browse assemblies or search official names, numbers and workshop aliases.</p></div><div class="heading-actions"><a class="secondary-button" id="return-bench" href="index.html">Return to bench</a><button class="secondary-button orange" id="new-item" type="button">Admin: New item</button></div></section>
   <section class="search-panel">
     <div class="catalog-toolbar">
-      <input class="control" id="catalog-search" type="search" placeholder="Search part number, item name or HSN/SAC">
-      <select class="control" id="name-mode" style="max-width:190px"><option value="tagro">Use TAGRO names</option><option value="stihl">Use STIHL names</option></select>
-      <select class="control" id="type-filter" style="max-width:180px"><option value="">All item types</option><option value="machine">Machines</option><option value="accessory">Accessories</option><option value="part">Parts</option><option value="service">Services</option></select>
-      <label class="checkbox-row" style="padding:9px 12px"><input id="review-filter" type="checkbox"><span><strong>Needs review</strong></span></label>
+      <input class="control" id="catalog-search" type="search" autocomplete="off" enterkeyhint="search" placeholder="Search name, alias or part number">
+      <select class="control" id="global-model" aria-label="Machine model"><option value="">Choose model</option></select>
+      <select class="control" id="destination-select" aria-label="Add selected parts to"><option value="hold:1">Adding to: HOLD 1</option></select>
+      <select class="hidden" id="name-mode"><option value="stihl" selected>Official STIHL names</option></select>
+      <select class="hidden" id="type-filter"><option value="part" selected>Parts</option></select>
+      <input class="hidden" id="review-filter" type="checkbox">
       <span id="catalog-count" class="catalog-count"></span>
     </div>
+    <div class="assembly-carousel global-assembly-carousel" id="global-assembly-carousel"></div>
   </section>
   <div class="data-table-wrap catalog-table-wrap" style="margin-top:18px">
-    <table class="data-table"><thead><tr><th>Part number / Item</th><th>Type</th><th>HSN/SAC</th><th>GST</th><th>Retail</th><th>MRP</th><th>Quality</th></tr></thead><tbody id="catalog-body"></tbody></table>
+    <table class="data-table"><thead><tr><th>Part number / Official item</th><th>Type</th><th>HSN/SAC</th><th>GST</th><th>Retail</th><th>MRP</th><th>Source</th><th>Add</th></tr></thead><tbody id="catalog-body"></tbody></table>
     <div class="empty-state hidden" id="catalog-empty"><div class="empty-state-icon">≡</div><strong>No matching items</strong><p>Add a new catalog item or change the filters.</p></div>
   </div>
 </main>
 <div class="toast" id="toast"></div>
+<button class="hidden" id="cloud-library" type="button">Cloud parts library</button>
 
 <div class="modal-backdrop hidden" id="item-modal">
   <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="item-title" style="width:min(100%,680px)">
@@ -90,7 +94,7 @@ const form = document.getElementById('item-form');
 const message = document.getElementById('form-message');
 
 window.addEventListener('DOMContentLoaded', boot);
-async function boot() {
+async function legacyBoot() {
   session = await Session.restore();
   if (!session) { location.replace('login.html'); return; }
   document.getElementById('name-mode').value = OS.get('tagro_parts_name_mode', 'tagro');
@@ -98,7 +102,7 @@ async function boot() {
   await loadItems();
 }
 
-async function loadItems() {
+async function legacyLoadItems() {
   body.innerHTML = '<tr><td colspan="7">Loading catalog…</td></tr>';
   const query = document.getElementById('catalog-search').value.trim();
   const type = document.getElementById('type-filter').value;
@@ -114,7 +118,7 @@ async function loadItems() {
   }
 }
 
-function renderItems() {
+function legacyRenderItems() {
   body.innerHTML = ''; empty.classList.toggle('hidden', items.length > 0);
   for (const item of items) {
     const row = document.createElement('tr');
@@ -124,6 +128,178 @@ function renderItems() {
     if (!item.read_only) row.addEventListener('click', () => openForm(item)); else row.title = 'Official STIHL price-list item';
     body.appendChild(row);
   }
+}
+
+let destinationOrders = [];
+let activeAssembly = '';
+
+async function boot() {
+  session = await Session.restore();
+  if (!session) { location.replace('login.html'); return; }
+  const role = String(session.role || '').toLowerCase();
+  document.getElementById('new-item').classList.toggle('hidden', !['manager', 'owner'].includes(role));
+  document.getElementById('verify-row').classList.toggle('hidden', !['manager','owner'].includes(role));
+  await Promise.all([loadGlobalModels(), loadDestinations()]);
+  const params = new URLSearchParams(location.search);
+  const requestedModel = String(params.get('model') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (requestedModel) {
+    const model = document.getElementById('global-model');
+    if (![...model.options].some(option => option.value === requestedModel)) model.add(new Option(requestedModel.replace(/^([A-Z]+)(\d)/, '$1 $2'), requestedModel));
+    model.value = requestedModel;
+  }
+  await loadItems();
+}
+
+async function loadGlobalModels() {
+  const select = document.getElementById('global-model');
+  try {
+    const data = await Api.request('/knowledge/models');
+    knowledgeModels = data.models || [];
+    select.innerHTML = '<option value="">Choose model</option>' + knowledgeModels.map(model =>
+      '<option value="' + OS.esc(model.key) + '">' + OS.esc(model.label) + '</option>'
+    ).join('');
+  } catch {
+    select.innerHTML = '<option value="">Choose model</option>';
+  }
+}
+
+async function loadDestinations() {
+  const params = new URLSearchParams(location.search);
+  const requestedJob = params.get('job') || '';
+  const select = document.getElementById('destination-select');
+  try {
+    const data = await Api.request('/work-orders?limit=100');
+    destinationOrders = (data.workOrders || []).filter(order => !['delivered', 'cancelled'].includes(String(order.status || '').toLowerCase()));
+  } catch { destinationOrders = []; }
+  const jobs = destinationOrders.map(order =>
+    '<option value="job:' + OS.esc(order.id) + '">' + OS.esc(order.workOrder + ' · ' + (order.machineDescription || 'Machine')) + '</option>'
+  ).join('');
+  const holds = Array.from({ length: 10 }, (_, index) => '<option value="hold:' + (index + 1) + '">HOLD ' + (index + 1) + '</option>').join('');
+  select.innerHTML = '<optgroup label="Open bench units">' + jobs + '</optgroup><optgroup label="Estimate / parts HOLD">' + holds + '</optgroup>';
+  if (requestedJob && destinationOrders.some(order => order.id === requestedJob)) select.value = 'job:' + requestedJob;
+  else select.value = 'hold:1';
+  updateReturnLink();
+}
+
+function updateReturnLink() {
+  const value = document.getElementById('destination-select').value;
+  const link = document.getElementById('return-bench');
+  if (value.startsWith('job:')) {
+    link.href = 'work.html?id=' + encodeURIComponent(value.slice(4));
+    link.textContent = 'Return to bench';
+  } else {
+    link.href = 'index.html';
+    link.textContent = 'Return to My Space';
+  }
+}
+
+async function loadItems() {
+  body.innerHTML = '<tr><td colspan="8">Loading parts…</td></tr>';
+  const query = document.getElementById('catalog-search').value.trim();
+  const model = document.getElementById('global-model').value;
+  try {
+    if (model) {
+      const data = await Api.request('/knowledge/parts?model=' + encodeURIComponent(model) + '&query=' + encodeURIComponent(query) + '&limit=500');
+      items = (data.parts || []).map(part => ({
+        id: 'knowledge:' + (part.currentPartNumber || part.partNumber),
+        part_number: part.currentPartNumber || part.partNumber || '',
+        item_name: part.stihlName || part.name || part.tagroName || '',
+        stihl_name: part.stihlName || part.name || '',
+        tagro_name: part.tagroName || null,
+        item_type: 'part',
+        hsn_sac: part.hsn || '',
+        gst_rate: part.gst ?? '',
+        retail_price: part.retailPrice ?? '',
+        mrp: part.mrp ?? '',
+        read_only: 1,
+        data_source: (part.sources || []).join('+') || 'model_catalog',
+        section: part.section || '',
+        reference: part.reference || ''
+      }));
+      renderAssemblies();
+      if (activeAssembly && !query) items = items.filter(item => item.section === activeAssembly);
+      document.getElementById('catalog-count').textContent = items.length + ' parts for ' + model.replace(/^([A-Z]+)(\d)/, '$1 $2');
+    } else {
+      document.getElementById('global-assembly-carousel').innerHTML = '';
+      const data = await Api.request('/catalog?limit=150&type=part&query=' + encodeURIComponent(query));
+      items = data.items || [];
+      const total = Number(data.source?.officialTotal || 0);
+      document.getElementById('catalog-count').textContent = query
+        ? (Number(data.source?.officialMatches || items.length) + ' matching parts')
+        : ('Showing ' + items.length.toLocaleString('en-IN') + (total ? ' · ' + total.toLocaleString('en-IN') + ' official items' : ''));
+    }
+    renderItems();
+  } catch (error) {
+    body.innerHTML = ''; empty.classList.remove('hidden'); empty.querySelector('strong').textContent = 'Unable to load parts'; empty.querySelector('p').textContent = error.message;
+  }
+}
+
+function renderAssemblies() {
+  const carousel = document.getElementById('global-assembly-carousel');
+  const sections = [...new Set(items.map(item => item.section).filter(Boolean))];
+  if (!sections.length) { activeAssembly = ''; carousel.innerHTML = '<span class="catalog-count">No uploaded assemblies for this model yet.</span>'; return; }
+  if (!sections.includes(activeAssembly)) activeAssembly = sections[0];
+  carousel.innerHTML = sections.map(section =>
+    '<button type="button" class="' + (section === activeAssembly ? 'active' : '') + '" data-global-section="' + OS.esc(section) + '">' + OS.esc(section) + '</button>'
+  ).join('');
+  carousel.querySelectorAll('[data-global-section]').forEach(button => button.addEventListener('click', () => {
+    activeAssembly = button.dataset.globalSection; loadItems();
+  }));
+}
+
+function renderItems() {
+  body.innerHTML = ''; empty.classList.toggle('hidden', items.length > 0);
+  const selectedModel = document.getElementById('global-model').value;
+  for (const [index, item] of items.entries()) {
+    const row = document.createElement('tr');
+    const official = item.stihl_name || item.item_name || 'Unnamed part';
+    const workshop = item.tagro_name && item.tagro_name.toLowerCase() !== official.toLowerCase() ? item.tagro_name : '';
+    const namingAction = !workshop && selectedModel ? '<button class="secondary-button catalog-name-request" type="button" data-global-need-name="' + index + '">Needs TAGRO Name</button>' : '';
+    row.innerHTML = '<td class="item-name-cell"><strong>' + OS.esc(item.part_number) + '</strong><span>' + OS.esc(official) + '</span>' + (workshop ? '<small>TAGRO: ' + OS.esc(workshop) + '</small>' : namingAction) + '</td><td>Part</td><td>' + OS.esc(item.hsn_sac || 'Pending') + '</td><td>' + number(item.gst_rate) + '%</td><td class="money">' + money(item.retail_price) + '</td><td class="money">' + money(item.mrp) + '</td><td><span class="verified-flag">Official list</span></td><td><button class="secondary-button orange catalog-add" type="button" data-global-add="' + index + '">Add</button></td>';
+    body.appendChild(row);
+  }
+  body.querySelectorAll('[data-global-add]').forEach(button => button.addEventListener('click', () => addToDestination(items[Number(button.dataset.globalAdd)])));
+  body.querySelectorAll('[data-global-need-name]').forEach(button => button.addEventListener('click', async () => {
+    const item = items[Number(button.dataset.globalNeedName)];
+    button.disabled = true;
+    try {
+      await Api.request('/catalog/name-requests', {
+        method: 'POST',
+        body: JSON.stringify({
+          model: document.getElementById('global-model').value,
+          partNumber: item.part_number,
+          stihlName: item.stihl_name || item.item_name
+        })
+      });
+      button.textContent = 'Marked for naming';
+    } catch (error) {
+      button.disabled = false;
+      Toast.show(error.message);
+    }
+  }));
+}
+
+function addToDestination(item) {
+  if (!item?.part_number || !item?.item_name) return;
+  const destination = document.getElementById('destination-select').value;
+  const part = {
+    partNumber: item.part_number,
+    itemName: item.stihl_name || item.item_name,
+    quantity: 1,
+    unitPrice: item.retail_price ?? item.mrp ?? '',
+    hsnSac: item.hsn_sac || '',
+    gstRate: item.gst_rate ?? '',
+    source: item.data_source || 'catalog',
+    draft: false
+  };
+  const key = destination.startsWith('job:') ? 'tagro_parts_handoff_' + destination.slice(4) : 'tagro_parts_hold_' + destination.slice(5);
+  const current = OS.get(key, []);
+  const list = Array.isArray(current) ? current : [];
+  const existing = list.find(saved => saved.partNumber === part.partNumber);
+  if (existing) existing.quantity = Number(existing.quantity || 1) + 1;
+  else list.push(part);
+  OS.set(key, list);
+  Toast.show(destination.startsWith('job:') ? 'Part queued for that bench unit.' : 'Part added to ' + destination.toUpperCase().replace(':', ' ') + '.');
 }
 
 function openForm(item = null) {
@@ -252,6 +428,8 @@ document.getElementById('cloud-query').addEventListener('keydown', event => { if
 document.getElementById('close-modal').addEventListener('click', closeModal);
 document.getElementById('cancel-button').addEventListener('click', closeModal);
 document.getElementById('catalog-search').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(loadItems, 350); });
+document.getElementById('global-model').addEventListener('change', () => { activeAssembly = ''; loadItems(); });
+document.getElementById('destination-select').addEventListener('change', updateReturnLink);
 document.getElementById('type-filter').addEventListener('change', loadItems);
 document.getElementById('review-filter').addEventListener('change', loadItems);
 document.getElementById('name-mode').addEventListener('change', event => {

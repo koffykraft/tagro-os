@@ -232,6 +232,12 @@ async function routeApi(request, env, url) {
     return createCatalogNameSuggestions(request, env, session);
   }
 
+  if (url.pathname === '/api/catalog/name-requests' && request.method === 'POST') {
+    const session = await getSession(request, env);
+    if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
+    return requestCatalogTagroName(request, env, session);
+  }
+
   if (url.pathname === '/api/purchase-orders' && request.method === 'GET') {
     const session = await getSession(request, env);
     if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
@@ -1669,7 +1675,6 @@ async function listCatalogItems(env, url) {
   if (!Array.isArray(master)) {
     return json({ ok: true, items: localItems, source: { local: localItems.length, official: 0 } });
   }
-  const queryText = query.toLowerCase();
   const existingPartNumbers = new Set(localItems.map(item => normalizePartNumber(item.part_number)));
   const officialItems = [];
   for (const part of master) {
@@ -1681,7 +1686,20 @@ async function listCatalogItems(env, url) {
     const itemName = tagroName || stihlName;
     const hsnSac = cleanText(part?.hsn, 30).toUpperCase();
     if (!partNumber || !itemName || !hsnSac) continue;
-    if (queryText && !`${partNumber} ${tagroName} ${stihlName} ${hsnSac}`.toLowerCase().includes(queryText)) continue;
+    const aliases = Array.isArray(part?.aliases)
+      ? cleanStringList(part.aliases, 20, 240)
+      : cleanStringList(String(part?.alias || '').split(','), 20, 240);
+    const score = query
+      ? flexiblePartScore(query, {
+          partNumber,
+          tagroName,
+          stihlName,
+          aliases,
+          modelGroup: part?.modelGroup,
+          models: part?.models
+        })
+      : 0;
+    if (query && score < 0) continue;
     const normalized = normalizePartNumber(partNumber);
     if (existingPartNumbers.has(normalized)) continue;
     existingPartNumbers.add(normalized);
@@ -1705,14 +1723,28 @@ async function listCatalogItems(env, url) {
       active: 1,
       read_only: 1,
       created_at: cleanText(part?.effectiveDate, 20) || null,
-      updated_at: cleanText(part?.effectiveDate, 20) || null
+      updated_at: cleanText(part?.effectiveDate, 20) || null,
+      _score: score
     });
-    if (localItems.length + officialItems.length >= limit) break;
+    if (!query && localItems.length + officialItems.length >= limit) break;
   }
+  officialItems.sort((a, b) => Number(b._score || 0) - Number(a._score || 0) ||
+    String(a.stihl_name || a.item_name).localeCompare(String(b.stihl_name || b.item_name)));
+  const visibleOfficialItems = officialItems
+    .slice(0, Math.max(0, limit - localItems.length))
+    .map(item => {
+      const { _score, ...publicItem } = item;
+      return publicItem;
+    });
   return json({
     ok: true,
-    items: [...localItems, ...officialItems],
-    source: { local: localItems.length, official: officialItems.length, officialTotal: master.length }
+    items: [...localItems, ...visibleOfficialItems],
+    source: {
+      local: localItems.length,
+      official: visibleOfficialItems.length,
+      officialMatches: officialItems.length,
+      officialTotal: master.length
+    }
   });
 }
 
@@ -4415,6 +4447,27 @@ function buildTagroWorkingWorkbook(order) {
   return workbook;
 }
 
+async function requestCatalogTagroName(request, env, session) {
+  const body = await readJson(request);
+  const partNumber = normalizePartNumber(body.partNumber);
+  const model = normalizeModelKey(body.model);
+  const stihlName = cleanText(body.stihlName, 240);
+  if (!partNumber || !model || !stihlName) {
+    return json({ ok: false, error: 'Model, STIHL part number and STIHL name are required.' }, 400);
+  }
+  const now = new Date().toISOString();
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO catalog_name_suggestions
+      (id, canonical_part_number, model_key, stihl_name, suggested_tagro_name,
+       rationale, confidence, status, created_by, created_at)
+     VALUES (?, ?, ?, ?, '', ?, 0, 'suggested', ?, ?)`
+  ).bind(
+    makeId('namerequest'), partNumber, model, stihlName,
+    'Workshop user marked this part as needing a TAGRO name.', session.id, now
+  ).run();
+  return json({ ok: true, partNumber, model, message: 'Marked for TAGRO naming.' });
+}
+
 async function createCatalogNameSuggestions(request, env, session) {
   if (!env.CATALOG_KV) return json({ ok: false, error: 'Cloud catalog is not connected.' }, 503);
   const body = await readJson(request);
@@ -4527,7 +4580,7 @@ async function searchKnowledgeParts(env, url) {
   if (!env.CATALOG_KV) return json({ ok: false, error: 'Cloud catalog is not connected.' }, 503);
   const modelKey = normalizeModelKey(url.searchParams.get('model'));
   const query = cleanText(url.searchParams.get('query'), 120).toLowerCase();
-  const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 80, 1), 150);
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 80, 1), 500);
   if (!modelKey && query.length < 2) {
     return json({ ok: false, error: 'Select a model or enter at least two search characters.' }, 400);
   }
@@ -4610,7 +4663,10 @@ async function searchKnowledgeParts(env, url) {
     }
   }
   if (Array.isArray(master)) {
-    for (const part of master) add(part, 'master_price_list', null);
+    for (const part of master) {
+      const masterKey = normalizePartNumber(part?.no || part?.partNumber || part?.id);
+      if (!modelKey || (masterKey && results.has(masterKey))) add(part, 'master_price_list', null);
+    }
   }
   const parts = [...results.values()]
     .sort((a, b) => b._score - a._score ||

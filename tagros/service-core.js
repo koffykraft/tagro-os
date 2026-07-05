@@ -43,7 +43,7 @@ const WorkOrderForm={
     }
   },
   bind(){
-    document.getElementById('add-part').addEventListener('click',()=>{this.parts.push({quantity:1});this.renderParts();this.changed()});
+    document.getElementById('add-part').addEventListener('click',()=>document.dispatchEvent(new CustomEvent('tagro:open-parts')));
     document.getElementById('customer-search').addEventListener('input',ServiceUI.debounce(()=>this.searchCustomers(),300));
     document.getElementById('customer-search').addEventListener('keydown',event=>{if(event.key==='Escape')this.hideSearch()});
     document.querySelectorAll('[data-accessory]').forEach(button=>button.addEventListener('click',()=>{
@@ -80,7 +80,7 @@ const WorkOrderForm={
     this.parts=(order.parts||[]).map(part=>({
       partNumber:part.part_number||'',itemName:part.item_name||'',quantity:part.quantity??1,
       unitPrice:part.unit_price??'',hsnSac:part.hsn_sac||'',gstRate:part.gst_rate??'',
-      notes:part.notes||'',source:part.source||'manual'
+      notes:part.notes||'',source:part.source||'manual',draft:!(part.part_number&&part.item_name)
     }));
     this.renderParts();
     this.renderIntakePhotos(order.intake);
@@ -99,13 +99,14 @@ const WorkOrderForm={
   value(id){return document.getElementById(id).value.trim()},
   payload(){
     this.readParts();
+    const savedParts=this.parts.filter(part=>!part.draft&&part.partNumber&&part.itemName);
     return{
       customerId:this.customerId,customerName:this.value('customer-name'),customerPhone:this.value('customer-phone'),
       customerPlace:this.value('customer-place'),machineDescription:this.value('machine-description'),
       serialNumber:this.value('machine-serial'),
       accessories:[...document.querySelectorAll('[data-accessory].selected')].map(button=>button.dataset.accessory),
       complaint:this.value('complaint'),observation:this.value('observation'),workDone:this.value('work-done'),
-      parts:this.parts,billingSubtotal:this.value('billing-subtotal'),billingTax:this.value('billing-tax'),
+      parts:savedParts,billingSubtotal:this.value('billing-subtotal'),billingTax:this.value('billing-tax'),
       billingTotal:this.value('billing-total'),billingNote:this.value('billing-note'),
       assignedTo:document.getElementById('assigned-to')?.value||this.order?.assignedTo||null
     };
@@ -178,14 +179,34 @@ const WorkOrderForm={
       partNumber:row.querySelector('[data-part-number]').value.trim(),itemName:row.querySelector('[data-part-name]').value.trim(),
       quantity:row.querySelector('[data-part-quantity]').value,unitPrice:row.querySelector('[data-part-price]').value,
       hsnSac:row.dataset.partHsn||'',gstRate:row.dataset.partGst??'',notes:row.dataset.partNotes||'',
-      source:row.dataset.partSource||'manual'
+      source:row.dataset.partSource||'manual',draft:row.dataset.partDraft==='1'
     }));
   },
-  renderParts(){
+  legacyRenderParts(){
     const list=document.getElementById('part-list');
     list.innerHTML=this.parts.map((part,index)=>'<div class="part-row" data-part-index="'+index+'" data-part-hsn="'+ServiceUI.esc(part.hsnSac||'')+'" data-part-gst="'+ServiceUI.esc(part.gstRate??'')+'" data-part-notes="'+ServiceUI.esc(part.notes||'')+'" data-part-source="'+ServiceUI.esc(part.source||'manual')+'"><input class="control" data-part-number placeholder="Part number" value="'+ServiceUI.esc(part.partNumber||'')+'"><input class="control" data-part-name placeholder="Part name / description" value="'+ServiceUI.esc(part.itemName||'')+'"><input class="control" data-part-quantity type="number" min=".01" step=".01" placeholder="Qty" value="'+ServiceUI.esc(part.quantity??1)+'"><input class="control" data-part-price type="number" min="0" step=".01" placeholder="Price" value="'+ServiceUI.esc(part.unitPrice??'')+'"><button class="remove-part" type="button" aria-label="Remove part">×</button></div>').join('');
     list.querySelectorAll('input').forEach(input=>input.addEventListener('input',()=>this.changed()));
     list.querySelectorAll('.remove-part').forEach((button,index)=>button.addEventListener('click',()=>{this.readParts();this.parts.splice(index,1);this.renderParts();this.changed()}));
+    document.dispatchEvent(new CustomEvent('tagro:parts-updated'));
+  },
+  renderParts(){
+    const list=document.getElementById('part-list');
+    list.innerHTML=this.parts.map((part,index)=>{
+      const source=part.source||'manual',draft=Boolean(part.draft),locked=source!=='manual'&&!draft;
+      const sourceLabel=locked?'Catalogue part':(draft?'Unsaved manual draft':'Manual part');
+      return '<div class="part-row" data-part-index="'+index+'" data-part-hsn="'+ServiceUI.esc(part.hsnSac||'')+'" data-part-gst="'+ServiceUI.esc(part.gstRate??'')+'" data-part-notes="'+ServiceUI.esc(part.notes||'')+'" data-part-source="'+ServiceUI.esc(source)+'" data-part-draft="'+(draft?'1':'0')+'"><input class="control" data-part-number placeholder="Part number" value="'+ServiceUI.esc(part.partNumber||'')+'" '+(locked?'readonly':'')+'><input class="control" data-part-name placeholder="Part name / description" value="'+ServiceUI.esc(part.itemName||'')+'" '+(locked?'readonly':'')+'><input class="control" data-part-quantity type="number" min=".01" step=".01" placeholder="Qty" value="'+ServiceUI.esc(part.quantity??1)+'"><input class="control" data-part-price type="number" min="0" step=".01" placeholder="Price" value="'+ServiceUI.esc(part.unitPrice??'')+'"><span class="part-source">'+ServiceUI.esc(sourceLabel)+'</span>'+(draft?'<button class="confirm-part" type="button">Confirm</button>':'')+'<button class="remove-part" type="button" aria-label="Remove part">×</button></div>';
+    }).join('');
+    list.querySelectorAll('input').forEach(input=>input.addEventListener('input',()=>this.changed()));
+    list.querySelectorAll('.confirm-part').forEach(button=>button.addEventListener('click',()=>{
+      const row=button.closest('.part-row');
+      if(!row.querySelector('[data-part-number]').value.trim()||!row.querySelector('[data-part-name]').value.trim()){
+        Toast.show('Enter both part number and part name before confirming.');return;
+      }
+      row.dataset.partDraft='0';button.remove();row.querySelector('.part-source').textContent='Manual part';this.changed();
+    }));
+    list.querySelectorAll('.remove-part').forEach((button,index)=>button.addEventListener('click',()=>{
+      this.readParts();this.parts.splice(index,1);this.renderParts();this.changed();
+    }));
     document.dispatchEvent(new CustomEvent('tagro:parts-updated'));
   }
 };

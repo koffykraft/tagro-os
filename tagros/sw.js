@@ -1,4 +1,4 @@
-const CACHE='tagro-white-v20';
+const CACHE='tagro-white-v21';
 const SHELL=['/index.html','/login.html','/receive.html','/work.html','/app-customers.html','/app-branches.html','/app-machines.html','/app-catalog.html','/app-purchase-orders.html','/app-services.html','/app-jobs.html','/app-staff.html','/app-reports.html','/robots.txt','/os-shell.css','/service.css','/my-space.css','/intake.css','/work-space.css','/os-core.js','/service-core.js','/my-space.js','/intake.js','/work-space.js','/os-manifest.js','/os-icons.js','/tagro-logo.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));self.skipWaiting();});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))));self.clients.claim();});

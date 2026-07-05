@@ -33,7 +33,7 @@ assert(!work.includes("location.replace('receive.html'"), 'Work page still redir
 assert(work.includes("WorkOrderForm.mount({mode:'edit'"), 'Existing work-order editing is not preserved');
 assert(work.includes('id="intake-photo-panel"') && serviceCore.includes('renderIntakePhotos(order.intake)'), 'Completed intake photos are not shown on the work order');
 assert(worker.includes('FROM intake_drafts WHERE job_id = ?'), 'Work-order API does not attach completed intake photos');
-assert(sw.includes("'tagro-white-v20'"), 'Service worker cache was not advanced');
+assert(sw.includes("'tagro-white-v21'"), 'Service worker cache was not advanced');
 
 for (const retired of ['Rubber Biju', 'Jose Sawmill', 'Thomas Thumpassery', '9447000001', '9447000002', '9656361846']) {
   assert(!receive.includes(retired) && !intake.includes(retired), `Retired sample data found: ${retired}`);
