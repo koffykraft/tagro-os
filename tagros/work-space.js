@@ -38,6 +38,7 @@ const JobWorkspace = {
     document.getElementById('edit-bench-details').addEventListener('click', () => this.openDialog('job-details-dialog'));
     document.getElementById('open-parts-search').addEventListener('click', () => this.openParts());
     document.getElementById('edit-frequent').addEventListener('click', () => this.openParts());
+    document.getElementById('close-parts-sheet').addEventListener('click', () => this.closeParts());
     document.getElementById('add-manual-part').addEventListener('click', () => this.addManualPart());
     document.getElementById('create-estimate').addEventListener('click', () => this.createEstimate());
     document.getElementById('bench-part-search-button').addEventListener('click', () => this.searchParts());
@@ -473,9 +474,14 @@ const JobWorkspace = {
 
   openParts() {
     const input = document.getElementById('bench-part-query');
+    if (window.matchMedia('(max-width: 760px)').matches) document.body.classList.add('parts-sheet-open');
     document.getElementById('parts-reference').scrollIntoView({ behavior: 'smooth', block: 'start' });
     input.focus({ preventScroll: true });
     if (input.value.trim().length >= 2) this.searchParts();
+  },
+
+  closeParts() {
+    document.body.classList.remove('parts-sheet-open');
   },
 
   async searchParts() {
@@ -635,9 +641,11 @@ const JobWorkspace = {
   },
 
   renderTimeline() {
-    const events = Array.isArray(this.order.events) ? this.order.events : [];
+    const events = Array.isArray(this.order.events)
+      ? [...this.order.events].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      : [];
     document.getElementById('workspace-timeline').innerHTML = events.length ? events.map((event, index) => `
-      <article class="timeline-event ${index === events.length - 1 ? 'current' : ''}">
+      <article class="timeline-event ${index === 0 ? 'current' : ''}">
         <strong>${ServiceUI.esc(this.eventLabel(event.event_type))}</strong>
         <span>${ServiceUI.esc(event.data?.note || event.created_by_name || 'Workshop update')}</span>
         <small>${ServiceUI.esc(ServiceUI.date(event.created_at))}</small>

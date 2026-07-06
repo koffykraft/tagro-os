@@ -32,7 +32,7 @@ const AppShell = {
   },
 
   installCustomerSearch(root = document) {
-    if (root.body?.matches('.my-space-page,.intake-page')) return;
+    if (root.body?.matches('.my-space-page,.intake-page,.job-workspace-page')) return;
     if (root.getElementById('global-customer-search')) return;
     const button = root.createElement('button');
     button.id = 'global-customer-search';
