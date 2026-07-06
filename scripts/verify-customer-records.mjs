@@ -7,6 +7,7 @@ const migration = readFileSync(resolve(root, 'migrations/0006_customer_intake.sq
 const shell = readFileSync(resolve(root, 'tagros/app-shell.js'), 'utf8');
 const customerPage = readFileSync(resolve(root, 'tagros/app-customers.html'), 'utf8');
 const jobsPage = readFileSync(resolve(root, 'tagros/app-jobs.html'), 'utf8');
+const receivePage = readFileSync(resolve(root, 'tagros/receive.html'), 'utf8');
 
 const checks = [];
 function check(condition, message) {
@@ -23,12 +24,11 @@ check(worker.includes('async function getCustomerRecordData') &&
   worker.includes('total_visits: jobs.length'), 'customer detail contains machines, jobs and visits');
 check(worker.includes('completedServices >= 5') && worker.includes('completed_services'), 'loyal status derives from completed services');
 check(worker.includes('name LIKE ? COLLATE NOCASE OR phone LIKE ?'), 'customer search supports partial name and phone');
-check(shell.includes('installCustomerSearch') && shell.includes('/customers?limit=8&query='), 'shared customer search component is connected');
-
-check(jobsPage.includes('app-shell.js') &&
-  jobsPage.includes('class="jobs-page"') &&
-  shell.includes("if (!root.body?.matches('.jobs-page')) return"),
-  'shared customer search is limited to Repair Jobs and My Bench');
+check(!shell.includes('installCustomerSearch') &&
+  !jobsPage.includes('customer-search-fab') &&
+  receivePage.includes('id="customer-search"') &&
+  customerPage.includes('id="customer-search"'),
+  'customer search is limited to Receive and Customers');
 check(customerPage.includes('customer-machine-list') &&
   customerPage.includes('customer-job-list') &&
   customerPage.includes('customer-record-summary'), 'customer page renders the complete record');

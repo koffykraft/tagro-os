@@ -36,7 +36,7 @@ const JobWorkspace = {
     document.getElementById('sign-out').addEventListener('click', () => this.signOut());
     document.getElementById('edit-details').addEventListener('click', () => this.openDialog('job-details-dialog'));
     document.getElementById('edit-bench-details').addEventListener('click', () => this.openDialog('job-details-dialog'));
-    document.getElementById('open-parts-search').addEventListener('click', () => this.openParts());
+    document.getElementById('open-parts-search').addEventListener('click', () => this.openPartsPicker());
     document.getElementById('edit-frequent').addEventListener('click', () => this.openParts());
     document.getElementById('close-parts-sheet').addEventListener('click', () => this.closeParts());
     document.getElementById('add-manual-part').addEventListener('click', () => this.addManualPart());
@@ -478,6 +478,10 @@ const JobWorkspace = {
     document.getElementById('parts-reference').scrollIntoView({ behavior: 'smooth', block: 'start' });
     input.focus({ preventScroll: true });
     if (input.value.trim().length >= 2) this.searchParts();
+  },
+
+  openPartsPicker() {
+    location.href = `app-catalog.html?job=${encodeURIComponent(this.id)}`;
   },
 
   closeParts() {

@@ -28,8 +28,12 @@ check(worker.includes('SUM(COALESCE(wp.quantity, 0)) AS total_quantity') &&
 check(worker.includes("SUBSTR(j.opened_at, 1, 10) >= ?") &&
   worker.includes("SUBSTR(j.opened_at, 1, 10) <= ?") &&
   worker.includes("conditions.push('d.assigned_to = ?')"), 'branch history API filters by date and mechanic');
-check(jobs.includes('id="date-from"') && jobs.includes('id="date-to"') &&
-  jobs.includes('id="mechanic-filter"') && jobs.includes("params.set('mechanic',mechanic)"), 'branch history exposes status, date and mechanic filters');
+check(jobs.includes('id="status-filter"') &&
+  jobs.includes('id="mechanic-filter"') &&
+  jobs.includes("mechanic==='unassigned'") &&
+  jobs.includes("addEventListener('change',renderJobs)") &&
+  !jobs.includes('id="date-from"') &&
+  !jobs.includes('id="date-to"'), 'branch jobs exposes only the approved status and mechanic filters');
 
 console.log(`History verification passed: ${checks.length} checks.`);
 for (const message of checks) console.log(`- ${message}`);

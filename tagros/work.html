@@ -319,6 +319,7 @@
     if(!id){location.replace('app-jobs.html');return}
     try{
       await WorkOrderForm.mount({mode:'edit',id,session});
+      await WorkOrderForm.consumePartsHandoff();
       await JobWorkspace.mount({session,id,order:WorkOrderForm.order});
     }catch(error){
       document.getElementById('save-state').textContent=error.message;
