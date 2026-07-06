@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#ffffff"><title>Items & Parts — TAGRO OS</title>
-<link rel="stylesheet" href="os-shell.css"><script src="os-manifest.js"></script><script src="os-core.js"></script><script src="app-shell.js"></script>
+<link rel="stylesheet" href="os-shell.css"><link rel="stylesheet" href="os-design-system.css"><script src="os-manifest.js"></script><script src="os-core.js"></script><script src="app-shell.js"></script>
 </head>
-<body>
+<body class="catalog-page">
 <header class="app-topbar"><a class="back-button" href="index.html" aria-label="Back to applications">‹</a><div class="app-topbar-title"><strong>Items & Parts</strong><span>Sale and service catalog</span></div><a class="brand-logo" href="index.html"><img src="tagro-logo.png" alt="TAGRO"></a></header>
 <main class="app-workspace">
-  <section class="page-heading"><div><p class="eyebrow">Model-first parts workspace</p><h1>Choose the machine, then recognise the part.</h1><p>Browse assemblies or search official names, numbers and workshop aliases.</p></div><div class="heading-actions"><a class="secondary-button" id="return-bench" href="index.html">Return to bench</a><button class="secondary-button orange" id="new-item" type="button">Admin: New item</button></div></section>
+  <section class="page-heading"><div><p class="eyebrow">Official parts reference</p><h1>Items &amp; Parts</h1><p>Choose a model or search STIHL names, part numbers and TAGRO aliases.</p></div><div class="heading-actions"><a class="secondary-button" id="return-bench" href="index.html">Return to bench</a><button class="secondary-button orange" id="new-item" type="button">Admin: New item</button></div></section>
   <section class="search-panel">
     <div class="catalog-toolbar">
       <input class="control" id="catalog-search" type="search" autocomplete="off" enterkeyhint="search" placeholder="Search name, alias or part number">
@@ -26,6 +26,7 @@
     <div class="empty-state hidden" id="catalog-empty"><div class="empty-state-icon">≡</div><strong>No matching items</strong><p>Add a new catalog item or change the filters.</p></div>
   </div>
 </main>
+<nav class="catalog-mobile-nav" data-app-navigation="mobile-core" data-active-app="catalog" aria-label="Mobile navigation"></nav>
 <div class="toast" id="toast"></div>
 <button class="hidden" id="cloud-library" type="button">Cloud parts library</button>
 
@@ -136,6 +137,7 @@ let activeAssembly = '';
 async function boot() {
   session = await Session.restore();
   if (!session) { location.replace('login.html'); return; }
+  AppShell.renderAll(session);
   const role = String(session.role || '').toLowerCase();
   document.getElementById('new-item').classList.toggle('hidden', !['manager', 'owner'].includes(role));
   document.getElementById('verify-row').classList.toggle('hidden', !['manager','owner'].includes(role));

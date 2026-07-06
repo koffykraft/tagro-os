@@ -131,3 +131,145 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   body{overflow-x:hidden}
   main,section,article,header,footer,nav,form,div{max-width:100%}
 }
+
+/* Customer, machine history and global parts reference */
+.customer-page,.catalog-page,.machine-history-page{background:var(--surface);color:var(--text-primary)}
+.customer-page .app-workspace,.catalog-page .app-workspace{max-width:1100px;padding:24px 16px 100px}
+.customer-page .page-heading h1,.catalog-page .page-heading h1{font-size:24px;font-weight:700;letter-spacing:-.02em}
+.customer-page .page-heading p,.catalog-page .page-heading p{font-size:14px}
+.customer-page .search-panel,.catalog-page .search-panel,
+.customer-page .panel,.catalog-page .data-table-wrap,
+.machine-history-page .history-panel,.machine-history-page .history-summary>span{
+  border-color:var(--border);
+  border-radius:12px;
+  box-shadow:var(--card-shadow);
+}
+.customer-page .control,.catalog-page .control{min-height:48px;border-radius:8px;font-size:16px}
+.customer-page .secondary-button,.customer-page .primary-button,
+.catalog-page .secondary-button,.catalog-page .primary-button{
+  min-height:48px;
+  border-radius:10px;
+  font-size:16px;
+  font-weight:600;
+}
+.customer-page .panel-head h2{font-size:18px;font-weight:600;letter-spacing:0;text-transform:none}
+.customer-page .customer-row{min-height:76px;border-radius:12px;box-shadow:var(--card-shadow)}
+.customer-page .customer-main strong{font-size:16px;font-weight:600}
+.customer-page .customer-main span{font-size:14px}
+.customer-page .detail-name{font-size:20px;font-weight:600}
+.customer-page .detail-item label{font-size:12px}
+.customer-page .detail-item div,.customer-phone-link{color:var(--text-primary);font-size:16px}
+.customer-phone-link{display:inline-flex;min-height:44px;align-items:center}
+.customer-page .customer-record-summary{gap:12px}
+.customer-page .customer-record-summary>span{padding:16px;border-radius:12px}
+.customer-page .customer-record-summary strong{font-size:20px}
+.customer-page .customer-record-summary small{font-size:12px}
+.customer-page .customer-documents-head strong{font-size:18px;font-weight:600}
+.customer-page .customer-documents-head span{font-size:14px}
+.customer-page .customer-document-row{min-height:64px;border-radius:10px;padding:16px}
+.customer-page .customer-document-row strong{font-size:16px}
+.customer-page .customer-document-row small{font-size:14px}
+.customer-page .customer-document-row b{font-size:12px}
+.customer-page #customer-machine-list{display:flex;gap:12px;overflow-x:auto;padding-bottom:4px}
+.customer-page #customer-machine-list .customer-document-row{min-width:220px}
+.customer-page .empty-state,.catalog-page .empty-state{
+  min-height:56px;
+  max-height:80px;
+  padding:16px;
+}
+.customer-page .empty-state-icon,.catalog-page .empty-state-icon{
+  width:28px;
+  height:28px;
+  margin:0 auto 6px;
+  font-size:16px;
+}
+.customer-page .empty-state p,.catalog-page .empty-state p{display:none}
+.detail-back{
+  display:none;
+  min-width:44px;
+  min-height:44px;
+  border:0;
+  border-radius:10px;
+  background:#f3f1ed;
+  font-size:24px;
+}
+.catalog-page .catalog-toolbar{gap:12px}
+.catalog-page .catalog-toolbar .control{min-width:180px}
+.catalog-page #catalog-search{min-width:280px}
+.catalog-page .global-assembly-carousel{gap:12px}
+.catalog-page .global-assembly-carousel button{min-height:44px;border-radius:20px;font-size:14px;font-weight:600}
+.catalog-page .catalog-count{font-size:14px}
+.catalog-page .data-table th{font-size:12px}
+.catalog-page .data-table td{font-size:14px}
+.catalog-page .item-name-cell strong,.catalog-page .item-name-cell span{font-size:16px}
+.catalog-page .item-name-cell small{font-size:14px}
+.catalog-page .catalog-add{min-height:44px;font-size:16px}
+.catalog-mobile-nav{display:none}
+.machine-history-page .service-main{max-width:920px;padding-right:16px;padding-left:16px}
+.machine-history-page .screen-title{font-size:24px;font-weight:700}
+.machine-history-page .back-link{min-width:44px;min-height:44px}
+.machine-history-page .history-summary{gap:12px}
+.machine-history-page .history-summary>span{padding:16px}
+.machine-history-page .history-summary small{font-size:12px}
+.machine-history-page .history-summary strong{font-size:18px}
+.machine-history-page .history-layout{gap:12px}
+.machine-history-page .history-panel{padding:16px}
+.machine-history-page .history-panel h2{font-size:18px;font-weight:600}
+.machine-history-page .history-row{min-height:64px;padding:14px 0}
+.machine-history-page .history-row strong{font-size:16px}
+.machine-history-page .history-row small{font-size:14px}
+.machine-history-page .history-row b{font-size:12px}
+.machine-history-page .empty{
+  min-height:56px;
+  max-height:80px;
+  border:0;
+  padding:16px;
+  background:#f7f6f2;
+  font-size:14px;
+}
+@media(max-width:760px){
+  .customer-page .app-workspace,.catalog-page .app-workspace{padding:16px 16px 112px}
+  .customer-page .page-heading,.catalog-page .page-heading{gap:12px;margin-bottom:16px}
+  .customer-page .customer-layout{grid-template-columns:1fr;gap:12px}
+  .customer-page .detail-back{display:grid;place-items:center}
+  .customer-page:not(.customer-selected) .customer-layout>.panel:nth-child(2){display:none}
+  .customer-page.customer-selected .customer-layout>.panel:first-child{display:none}
+  .customer-page .customer-record-summary{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .customer-page .customer-record-summary>span{display:block}
+  .customer-page .customer-record-summary small{margin-top:4px}
+  .catalog-page .catalog-toolbar{display:grid;grid-template-columns:1fr 1fr}
+  .catalog-page #catalog-search{grid-column:1/-1;min-width:0}
+  .catalog-page .catalog-toolbar .control{width:100%;min-width:0}
+  .catalog-page .catalog-count{grid-column:1/-1}
+  .catalog-page .catalog-table-wrap tr{border-radius:12px;padding:16px;box-shadow:var(--card-shadow)}
+  .catalog-page .catalog-table-wrap td{font-size:14px}
+  .catalog-page .catalog-table-wrap td:before{font-size:12px}
+  .catalog-mobile-nav{
+    position:fixed;
+    z-index:40;
+    right:0;
+    bottom:0;
+    left:0;
+    height:76px;
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(48px,1fr));
+    border-top:1px solid var(--border);
+    background:rgba(255,255,255,.97);
+    box-shadow:0 -5px 18px rgba(35,29,24,.08);
+  }
+  .catalog-mobile-nav a{
+    min-height:44px;
+    display:grid;
+    place-items:center;
+    align-content:center;
+    gap:2px;
+    color:var(--text-secondary);
+    text-decoration:none;
+    font-size:15px;
+  }
+  .catalog-mobile-nav .nav-icon{font-size:20px}
+  .catalog-mobile-nav a.active{color:var(--brand);font-weight:600}
+  .machine-history-page .service-main{padding:16px 16px 100px}
+  .machine-history-page .history-summary{grid-template-columns:1fr 1fr}
+  .machine-history-page .history-layout{grid-template-columns:1fr}
+}

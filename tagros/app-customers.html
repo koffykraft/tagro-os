@@ -6,11 +6,12 @@
 <meta name="theme-color" content="#ffffff">
 <title>Customers — TAGRO OS</title>
 <link rel="stylesheet" href="os-shell.css">
+<link rel="stylesheet" href="os-design-system.css">
 <script src="os-manifest.js"></script>
 <script src="os-core.js"></script>
 <script src="app-shell.js"></script>
 </head>
-<body>
+<body class="customer-page">
 <header class="app-topbar">
   <a class="back-button" href="index.html" aria-label="Back to applications">‹</a>
   <div class="app-topbar-title"><strong>Customers</strong><span id="branch-label">TAGRO OS</span></div>
@@ -19,7 +20,7 @@
 
 <main class="app-workspace">
   <section class="page-heading">
-    <div><p class="eyebrow">Customer data</p><h1>Know the customer.</h1><p>Search before creating. Keep contact and service history connected.</p></div>
+    <div><p class="eyebrow">Customer history</p><h1>Customers</h1><p>Find a customer, their machines and previous service visits.</p></div>
     <button class="secondary-button orange" id="new-customer" type="button">+ New customer</button>
   </section>
 
@@ -43,7 +44,7 @@
     </section>
 
     <section class="panel">
-      <div class="panel-head"><h2 id="side-title">Customer details</h2></div>
+      <div class="panel-head"><button class="detail-back" id="detail-back" type="button" aria-label="Back to customers">‹</button><h2 id="side-title">Customer details</h2></div>
       <div class="panel-body">
         <div class="empty-state" id="detail-empty"><div class="empty-state-icon">＋</div><strong>Select a customer</strong><p>Choose a result to view it, or create a new customer record.</p></div>
 
@@ -121,6 +122,14 @@ const detail = document.getElementById('customer-detail');
 const detailEmpty = document.getElementById('detail-empty');
 const formMessage = document.getElementById('form-message');
 
+document.getElementById('detail-back').addEventListener('click', () => {
+  document.body.classList.remove('customer-selected');
+  detail.classList.add('hidden');
+  detailEmpty.classList.remove('hidden');
+  selectedCustomer = null;
+  document.querySelectorAll('.customer-row').forEach(row => row.classList.remove('selected'));
+});
+
 window.addEventListener('DOMContentLoaded', boot);
 
 async function boot() {
@@ -179,6 +188,7 @@ function renderCustomers(customers) {
 
 async function showCustomer(customer) {
   selectedCustomer = customer;
+  document.body.classList.add('customer-selected');
   form.classList.add('hidden');
   detailEmpty.classList.add('hidden');
   detail.classList.remove('hidden');
@@ -187,7 +197,7 @@ async function showCustomer(customer) {
   document.getElementById('detail-name').textContent = customer.name;
   document.getElementById('detail-list').innerHTML = [
     detailItem('Customer type', customer.customer_type === 'business' ? 'Business' : 'Individual'),
-    detailItem('Phone', customer.phone),
+    detailPhone('Phone', customer.phone),
     detailItem('Alternate phone', customer.alternate_phone),
     detailItem('Email', customer.email),
     detailItem('Address', customer.address),
@@ -236,8 +246,16 @@ function detailItem(label, value) {
   return '<div class="detail-item"><label>' + OS.esc(label) + '</label><div>' + OS.esc(value || 'Not recorded') + '</div></div>';
 }
 
+function detailPhone(label, value) {
+  const phone = String(value || '').trim();
+  return '<div class="detail-item"><label>' + OS.esc(label) + '</label><div>' +
+    (phone ? '<a class="customer-phone-link" href="tel:' + encodeURIComponent(phone) + '">' + OS.esc(phone) + '</a>' : 'Not recorded') +
+    '</div></div>';
+}
+
 function openForm(customer = null) {
   selectedCustomer = customer;
+  document.body.classList.add('customer-selected');
   detail.classList.add('hidden');
   detailEmpty.classList.add('hidden');
   form.classList.remove('hidden');
@@ -263,7 +281,10 @@ function openForm(customer = null) {
 function closeForm() {
   form.classList.add('hidden');
   if (selectedCustomer) showCustomer(selectedCustomer);
-  else detailEmpty.classList.remove('hidden');
+  else {
+    detailEmpty.classList.remove('hidden');
+    document.body.classList.remove('customer-selected');
+  }
 }
 
 form.addEventListener('submit', async event => {
