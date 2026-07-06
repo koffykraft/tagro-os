@@ -9,14 +9,14 @@ const IntakeApp = {
   complaintKey: '',
   complaints: [],
   workingComplaints: [],
-  defaultComplaints: ["Won't Start", 'No Power', 'Chain Problem', 'Fuel Leak', 'Engine Noise', 'Service', 'Other'],
+  defaultComplaints: ["Won't Start", 'No Power', 'Fuel Leak', 'Oil Leak', 'Vibration', 'Service', 'Other'],
 
   async boot() {
     this.session = await ServiceUI.session();
     if (!this.session) return;
     AppShell.renderAll(this.session);
     ServiceUI.header(this.session);
-    this.complaintKey = `tagro_intake_complaints_${this.session.id || 'staff'}`;
+    this.complaintKey = `tagro_intake_complaints_v2_${this.session.id || 'staff'}`;
     this.complaints = this.loadComplaints();
     document.querySelectorAll('.admin-only').forEach(node => {
       node.hidden = !['manager', 'owner'].includes(String(this.session.role || '').toLowerCase());
@@ -62,6 +62,13 @@ const IntakeApp = {
     });
     document.getElementById('customer-name').addEventListener('input', () => this.clearSelectedCustomerIfChanged());
     document.getElementById('customer-phone').addEventListener('input', () => this.clearSelectedCustomerIfChanged());
+    document.querySelectorAll('[data-machine-model]').forEach(button => button.addEventListener('click', () => {
+      this.setMachineModel(button.dataset.machineModel);
+    }));
+    document.getElementById('machine-other').addEventListener('input', event => {
+      document.getElementById('machine-description').value = event.target.value.trim();
+      this.changed();
+    });
     document.getElementById('manage-complaints').addEventListener('click', () => this.openComplaintSettings());
     document.getElementById('add-complaint').addEventListener('click', () => this.addComplaint());
     document.getElementById('reset-complaints').addEventListener('click', () => {
@@ -182,7 +189,7 @@ const IntakeApp = {
     document.getElementById('customer-name').value = draft.customerName || '';
     document.getElementById('customer-phone').value = draft.customerPhone || '';
     document.getElementById('customer-place').value = draft.customerPlace || '';
-    document.getElementById('machine-description').value = draft.machineDescription || '';
+    this.setMachineModel(draft.machineDescription || '', false);
     document.getElementById('machine-serial').value = draft.serialNumber || '';
     document.getElementById('complaint').value = draft.complaint || '';
     document.querySelectorAll('input[name="contact-verification"]').forEach(input => {
@@ -403,10 +410,37 @@ const IntakeApp = {
     host.innerHTML = `<div class="field-label">Previous machines</div><div class="chip-row">${machines.map(machine => `<button type="button" class="choice-chip" data-known-machine="${ServiceUI.esc(machine.id)}">${ServiceUI.esc(machine.display_name)}</button>`).join('')}</div>`;
     host.querySelectorAll('[data-known-machine]').forEach(button => button.addEventListener('click', () => {
       const machine = machines.find(item => item.id === button.dataset.knownMachine);
-      document.getElementById('machine-description').value = machine?.display_name || '';
+      this.setMachineModel(machine?.display_name || '', false);
       document.getElementById('machine-serial').value = machine?.serial_number || '';
       this.changed();
     }));
+  },
+
+  setMachineModel(value, notify = true) {
+    const model = String(value || '').trim();
+    const buttons = [...document.querySelectorAll('[data-machine-model]')];
+    const known = buttons.find(button => button.dataset.machineModel !== 'Other'
+      && model.toUpperCase().includes(button.dataset.machineModel.toUpperCase()));
+    const selected = known?.dataset.machineModel || (model ? 'Other' : '');
+    buttons.forEach(button => {
+      const active = button.dataset.machineModel === selected;
+      button.classList.toggle('selected', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+    const otherField = document.getElementById('machine-other-field');
+    const otherInput = document.getElementById('machine-other');
+    const description = document.getElementById('machine-description');
+    const usingOther = selected === 'Other';
+    otherField.classList.toggle('hidden', !usingOther);
+    if (known) {
+      description.value = known.dataset.machineModel;
+      otherInput.value = '';
+    } else {
+      otherInput.value = model === 'Other' ? '' : model;
+      description.value = otherInput.value;
+    }
+    if (usingOther && notify) otherInput.focus({ preventScroll: true });
+    if (notify) this.changed();
   },
 
   hideCustomerResults() {

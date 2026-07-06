@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="os-shell.css">
   <link rel="stylesheet" href="service.css">
   <link rel="stylesheet" href="intake.css">
+  <link rel="stylesheet" href="os-design-system.css">
 </head>
 <body class="intake-page">
   <header class="service-header"></header>
@@ -57,7 +58,7 @@
             </button>
             <button class="photo-action" id="upload-photo" type="button">
               <span aria-hidden="true">▧</span>
-              <strong>Upload gallery</strong>
+              <strong>Upload from phone</strong>
               <small>Select up to 8</small>
             </button>
             <button class="photo-action admin-only" id="admin-add" type="button" hidden>
@@ -112,9 +113,20 @@
           </div>
 
           <div class="review-section">
-            <div class="review-section-title"><span aria-hidden="true">⌑</span><strong>Machine</strong><small>Describe naturally</small></div>
+            <div class="review-section-title"><span aria-hidden="true">⌑</span><strong>Machine</strong><small>Select the model</small></div>
             <div id="known-machines"></div>
-            <label class="field">Machine<input class="control" id="machine-description" placeholder="Brand, model and machine type"></label>
+            <div class="machine-model-list" id="machine-model-list" aria-label="Machine model">
+              <button class="machine-model-chip" type="button" data-machine-model="MS 382" aria-pressed="false">MS 382</button>
+              <button class="machine-model-chip" type="button" data-machine-model="MS 460" aria-pressed="false">MS 460</button>
+              <button class="machine-model-chip" type="button" data-machine-model="MS 461" aria-pressed="false">MS 461</button>
+              <button class="machine-model-chip" type="button" data-machine-model="MS 462" aria-pressed="false">MS 462</button>
+              <button class="machine-model-chip" type="button" data-machine-model="FS 120" aria-pressed="false">FS 120</button>
+              <button class="machine-model-chip" type="button" data-machine-model="FS 130" aria-pressed="false">FS 130</button>
+              <button class="machine-model-chip" type="button" data-machine-model="MS 180" aria-pressed="false">MS 180</button>
+              <button class="machine-model-chip" type="button" data-machine-model="Other" aria-pressed="false">Other</button>
+            </div>
+            <input id="machine-description" type="hidden">
+            <label class="field machine-other-field hidden" id="machine-other-field">Other model<input class="control" id="machine-other" placeholder="Brand, model and machine type"></label>
             <label class="field">Serial number<input class="control" id="machine-serial" placeholder="If visible"></label>
           </div>
 
