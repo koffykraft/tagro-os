@@ -8,21 +8,25 @@
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="os-shell.css">
   <link rel="stylesheet" href="service.css">
+  <link rel="stylesheet" href="os-design-system.css">
 </head>
-<body>
+<body class="jobs-page">
   <header class="service-header"></header>
   <main class="service-main">
     <div class="screen-bar">
       <a class="back-link" href="index.html" aria-label="Back">←</a>
       <div class="screen-bar-main">
-        <div class="screen-title" id="list-title">All jobs</div>
+        <div class="screen-title" id="list-title">Repair Jobs</div>
         <div class="save-state" id="list-count">Loading workshop…</div>
       </div>
       <a class="primary-button" href="receive.html" style="text-decoration:none">＋ Receive</a>
     </div>
-    <div class="filters">
-      <input class="control" id="job-search" type="search" placeholder="Customer, phone, machine, serial or work order">
-      <select class="control" id="status-filter" style="max-width:210px">
+    <div class="filters jobs-filters">
+      <label class="jobs-search">
+        <span aria-hidden="true">⌕</span>
+        <input class="control" id="job-search" type="search" placeholder="Customer, phone, machine, serial or work order">
+      </label>
+      <select class="control" id="status-filter" aria-label="Status">
         <option value="active">Active jobs</option>
         <option value="all">All history</option>
         <option value="received">Received</option>
@@ -40,6 +44,7 @@
     </div>
     <div class="job-list" id="job-list"><div class="empty">Loading work orders…</div></div>
   </main>
+  <nav class="jobs-mobile-nav" data-app-navigation="mobile-core" data-active-app="jobs" aria-label="Mobile navigation"></nav>
   <script src="os-manifest.js"></script><script src="os-core.js"></script><script src="app-shell.js"></script><script src="service-ui.js"></script>
   <script>
   let listSession=null,loadTimer=null;
@@ -56,14 +61,15 @@
       document.getElementById('list-count').textContent=orders.length+' work order'+(orders.length===1?'':'s');
       const statusOrder=['received','inspecting','awaiting_approval','repairing','paused','waiting_parts','ready','returned','cancelled'];
       const groups=statusOrder.map(key=>[key,orders.filter(item=>item.status===key)]).filter(([,items])=>items.length);
-      list.innerHTML=groups.length?groups.map(([,items])=>'<section class="job-group"><div class="job-group-head"><h2>'+ServiceUI.esc(items[0].statusLabel)+'</h2><span>'+items.length+'</span></div>'+items.map(item=>ServiceUI.jobCard(item)).join('')+'</section>').join(''):'<div class="empty">Nothing matches this search.</div>';
+      list.innerHTML=groups.length?groups.map(([,items])=>'<section class="job-group"><div class="job-group-head"><h2>'+ServiceUI.esc(items[0].statusLabel)+'</h2><span>'+items.length+'</span></div>'+items.map(item=>ServiceUI.jobCard(item)).join('')+'</section>').join(''):'<div class="empty">No jobs found</div>';
     }catch(error){list.innerHTML='<div class="empty">'+ServiceUI.esc(error.message)+'</div>'}
   }
   (async()=>{
     listSession=await ServiceUI.session();if(!listSession)return;ServiceUI.header(listSession);
     const params=new URLSearchParams(location.search);
     if(params.get('query'))document.getElementById('job-search').value=params.get('query');
-    if(params.get('mine')==='1'){document.getElementById('list-title').textContent='My bench';document.title='My Bench — TAGRO'}
+    if(params.get('mine')==='1'){document.getElementById('list-title').textContent='My Bench';document.title='My Bench — TAGRO';document.querySelector('.jobs-mobile-nav').dataset.activeApp='bench'}
+    AppShell.renderAll(listSession);
     if(params.get('status'))document.getElementById('status-filter').value=params.get('status');
     if(['manager','owner'].includes(String(listSession.role).toLowerCase())){const select=document.getElementById('mechanic-filter');try{const data=await Api.request('/staff');select.innerHTML='<option value="">Every mechanic</option>'+(data.staff||[]).filter(item=>item.active!==0).map(item=>'<option value="'+ServiceUI.esc(item.id)+'">'+ServiceUI.esc(item.name)+'</option>').join('');select.classList.remove('hidden')}catch{}}
     document.getElementById('job-search').addEventListener('input',()=>{clearTimeout(loadTimer);loadTimer=setTimeout(loadJobs,350)});

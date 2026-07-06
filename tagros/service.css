@@ -132,3 +132,146 @@ textarea.control{min-height:112px;resize:vertical;line-height:1.45}
   .job-card{gap:12px}
   .history-row{align-items:flex-start}
 }
+
+/* Warm workshop job lists and mechanic bench */
+.jobs-page{
+  background:var(--surface);
+  color:var(--text-primary);
+}
+.jobs-page .service-main{max-width:920px;padding-right:16px;padding-left:16px}
+.jobs-page .screen-bar{margin-bottom:16px}
+.jobs-page .screen-title{font-size:24px;font-weight:700;letter-spacing:-.02em}
+.jobs-page .back-link{min-width:44px;min-height:44px;border-radius:10px}
+.jobs-page .primary-button{min-height:48px;border-radius:10px;font-size:16px;font-weight:600}
+.jobs-filters{
+  display:grid;
+  grid-template-columns:minmax(260px,1fr) repeat(4,minmax(128px,auto));
+  align-items:center;
+  gap:12px;
+  margin:16px 0 24px;
+}
+.jobs-search{position:relative;display:block;min-width:0}
+.jobs-search>span{
+  position:absolute;
+  z-index:1;
+  left:14px;
+  top:50%;
+  transform:translateY(-50%);
+  color:var(--text-muted);
+  font-size:20px;
+  pointer-events:none;
+}
+.jobs-search #job-search{
+  width:100%;
+  max-width:none;
+  height:48px;
+  min-height:48px;
+  padding-left:42px;
+  border-radius:8px;
+}
+.jobs-filters>.control{
+  width:auto;
+  max-width:180px;
+  min-height:48px;
+  border-radius:8px;
+}
+.job-list{gap:12px}
+.job-group{gap:12px}
+.job-group+.job-group{margin-top:24px}
+.job-group-head{padding:0}
+.job-group-head h2{font-size:18px;font-weight:600}
+.job-group-head span{
+  min-width:28px;
+  padding:4px 10px;
+  background:var(--brand-soft);
+  color:var(--brand-dark);
+  font-size:12px;
+}
+.job-card{
+  position:relative;
+  min-height:116px;
+  border:1px solid var(--border);
+  border-left:4px solid var(--status-received);
+  border-radius:12px;
+  padding:16px;
+  box-shadow:var(--card-shadow);
+}
+.job-card[data-status="inspecting"],
+.job-card[data-status="repairing"]{border-left-color:var(--status-progress)}
+.job-card[data-status="waiting_parts"],
+.job-card[data-status="awaiting_approval"],
+.job-card[data-status="paused"]{border-left-color:var(--status-waiting)}
+.job-card[data-status="ready"],
+.job-card[data-status="returned"]{border-left-color:var(--status-completed)}
+.job-title{font-size:17px;font-weight:600}
+.job-customer{font-size:15px;font-weight:500}
+.job-meta{font-size:14px}
+.job-number{font-size:13px}
+.job-card-foot{align-items:center;font-size:14px}
+.age-badge{
+  display:inline-flex;
+  min-height:28px;
+  align-items:center;
+  border-radius:20px;
+  padding:3px 10px;
+  background:#fff5db;
+  color:#9a6912;
+  font-size:12px;
+  font-weight:600;
+}
+.status{font-size:12px;font-weight:600}
+.jobs-page .empty{
+  min-height:56px;
+  max-height:80px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  border:0;
+  border-radius:12px;
+  background:#fff;
+  padding:16px;
+  box-shadow:var(--card-shadow);
+  color:var(--text-muted);
+  font-size:16px;
+}
+.jobs-page .empty:before{content:"▱";font-size:18px}
+.jobs-mobile-nav{display:none}
+
+@media(max-width:760px){
+  .jobs-page .service-main{padding:16px 16px 120px}
+  .jobs-page .service-header{height:64px}
+  .jobs-page .screen-bar .primary-button{padding:12px}
+  .jobs-filters{grid-template-columns:1fr 1fr;margin-bottom:20px}
+  .jobs-search{grid-column:1/-1}
+  .jobs-filters>.control{width:100%;max-width:none}
+  .job-card{grid-template-columns:minmax(0,1fr);min-height:128px}
+  .job-side{display:flex;align-items:center;justify-content:space-between;text-align:left}
+  .jobs-mobile-nav{
+    position:fixed;
+    z-index:40;
+    right:0;
+    bottom:0;
+    left:0;
+    height:76px;
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(48px,1fr));
+    padding-bottom:env(safe-area-inset-bottom);
+    border-top:1px solid var(--border);
+    background:rgba(255,255,255,.97);
+    box-shadow:0 -5px 18px rgba(35,29,24,.08);
+  }
+  .jobs-mobile-nav a{
+    min-height:44px;
+    display:grid;
+    place-items:center;
+    align-content:center;
+    gap:2px;
+    color:var(--text-secondary);
+    text-decoration:none;
+    font-size:15px;
+  }
+  .jobs-mobile-nav .nav-icon{font-size:20px}
+  .jobs-mobile-nav a.active{color:var(--brand);font-weight:600}
+  .jobs-page .global-customer-search{right:16px;bottom:92px}
+}

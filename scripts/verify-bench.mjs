@@ -24,7 +24,7 @@ check(serviceUi.includes('this.machine(order)') &&
 check(serviceUi.includes('this.age(order.openedAt)') &&
   serviceUi.includes("order.assignedToName||'Unassigned'"), 'cards show age and assigned technician');
 check(serviceUi.includes('work.html?id=') && serviceUi.includes('encodeURIComponent(order.id)'), 'job tap opens the matching workbench');
-check(jobs.includes("params.set('mine','1')") && jobs.includes("textContent='My bench'"), 'personal bench remains available');
+check(jobs.includes("params.set('mine','1')") && jobs.includes("textContent='My Bench'"), 'personal bench remains available');
 
 console.log(`Bench verification passed: ${checks.length} checks.`);
 for (const message of checks) console.log(`- ${message}`);
