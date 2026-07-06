@@ -273,3 +273,35 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   .machine-history-page .history-summary{grid-template-columns:1fr 1fr}
   .machine-history-page .history-layout{grid-template-columns:1fr}
 }
+
+/* Purchase order mobile containment */
+.po-page{max-width:100%;overflow-x:hidden;background:var(--surface)}
+.po-page .topbar,.po-page .shell,.po-page .po-layout,.po-page .panel,.po-page .panel-body{max-width:100%;min-width:0}
+.po-page .brand{flex:0 1 auto;min-width:0;text-decoration:none}
+.po-page .brand img{width:104px;max-width:100%;height:40px;object-fit:contain}
+.po-page .topbar-actions{min-width:0;margin-left:auto;display:flex;align-items:center;gap:12px}
+.po-page .page-heading h1{font-size:24px;font-weight:700}
+.po-page .panel,.po-page .data-table-wrap{border-radius:12px;box-shadow:var(--card-shadow)}
+.po-page .control{min-height:48px;border-radius:8px;font-size:16px}
+.po-page .secondary-button,.po-page .primary-button{min-height:48px;border-radius:10px;font-size:16px;font-weight:600}
+.po-page .po-settings>*{min-width:0}
+.po-page .po-search{min-width:0}
+.po-page .po-search>*{min-width:0;max-width:100%}
+.po-page .po-lines-wrap{max-width:100%;overflow-x:auto}
+.po-page .po-summary{flex-wrap:wrap}
+.po-page .po-actions{gap:12px}
+@media(max-width:640px){
+  .po-page .topbar{max-width:100%;padding:10px 16px}
+  .po-page .brand{font-size:0}
+  .po-page .brand img{width:90px;height:36px}
+  .po-page .topbar-actions .secondary-button{display:none}
+  .po-page .shell{width:100%;padding:20px 16px 80px}
+  .po-page .page-heading{align-items:flex-start;flex-direction:column}
+  .po-page .heading-actions,.po-page .heading-actions button{width:100%}
+  .po-page .po-layout{grid-template-columns:minmax(0,1fr)}
+  .po-page .po-search{grid-template-columns:minmax(0,1fr)}
+  .po-page .po-search button{width:100%}
+  .po-page .po-summary{justify-content:space-between;gap:12px;padding:12px 0}
+  .po-page .po-actions button{width:100%}
+  .po-page .naming-assistant{max-width:100%;padding:12px}
+}
