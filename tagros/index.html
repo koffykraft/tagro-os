@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="os-shell.css">
   <link rel="stylesheet" href="service.css">
   <link rel="stylesheet" href="my-space.css">
+  <link rel="stylesheet" href="os-design-system.css">
 </head>
 <body class="my-space-page">
   <div class="space-shell">
@@ -42,6 +43,7 @@
       <main class="space-main">
         <div class="space-heading">
           <div>
+            <p class="space-greeting-line"><span id="heading-greeting">Good morning</span>, <strong id="heading-staff-name">Staff</strong></p>
             <h1>My Space</h1>
             <p>Your work, tools and shortcuts</p>
           </div>
@@ -89,29 +91,8 @@
             <div class="parked-list" id="parked-list"></div>
           </section>
 
-          <section class="communication-card" aria-labelledby="communication-title">
-            <div class="card-heading">
-              <h2 id="communication-title"><span aria-hidden="true">▢</span> Communication</h2>
-            </div>
-            <div class="communication-state">
-              <span class="communication-icon" aria-hidden="true">✓</span>
-              <div>
-                <strong>Communication hub is not enabled yet</strong>
-                <small>Customer, branch and manager messages will appear here only after the secure hub is connected.</small>
-              </div>
-            </div>
-          </section>
-
-          <section class="shortcuts-card" aria-labelledby="shortcuts-title">
-            <div class="card-heading">
-              <h2 id="shortcuts-title"><span aria-hidden="true">⠿</span> My Shortcuts</h2>
-              <button class="text-button customize-shortcuts" type="button">Customize</button>
-            </div>
-            <div class="shortcut-list" id="shortcut-list"></div>
-          </section>
-
           <section class="frequent-card" aria-labelledby="frequent-title">
-            <div class="card-heading"><h2 id="frequent-title">Frequently used</h2></div>
+            <div class="card-heading"><h2 id="frequent-title">Quick Actions</h2></div>
             <div class="frequent-list">
               <a href="app-catalog.html"><span class="frequent-icon orange">◇</span><small>Parts Picker</small></a>
               <a href="app-catalog.html"><span class="frequent-icon blue">▣</span><small>Repair Manual</small></a>
@@ -141,19 +122,6 @@
         <span><strong>Compact mode</strong><small>Show more information in less space.</small></span>
         <input id="compact-mode" type="checkbox" role="switch">
       </label>
-      <fieldset class="shortcut-settings">
-        <legend>Visible shortcuts</legend>
-        <div id="shortcut-settings"></div>
-      </fieldset>
-      <fieldset class="custom-shortcut-form">
-        <legend>Add a shortcut</legend>
-        <div class="custom-shortcut-grid">
-          <label>Name<input id="custom-name" type="text" maxlength="24" placeholder="Example: Parts supplier"></label>
-          <label>Link<input id="custom-url" type="text" inputmode="url" placeholder="https://, tel:, mailto:"></label>
-          <button class="outline-button" id="add-shortcut" type="button">Add</button>
-        </div>
-        <p class="field-message" id="shortcut-message" role="status"></p>
-      </fieldset>
       <div class="dialog-actions">
         <button class="outline-button" value="cancel">Cancel</button>
         <button class="save-personalization" id="save-personalization" value="default">Save changes</button>

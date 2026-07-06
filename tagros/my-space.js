@@ -26,7 +26,6 @@ const MySpace = {
     this.applyIdentity();
     this.applyPreferences();
     this.bind();
-    this.renderShortcuts();
     this.renderParked();
     await this.loadWork();
   },
@@ -52,6 +51,8 @@ const MySpace = {
     const roleName = role === 'owner' ? 'Owner' : role === 'manager' ? 'Manager' : 'Mechanic';
     document.getElementById('compact-greeting').textContent = greeting;
     document.getElementById('staff-name').textContent = firstName;
+    document.getElementById('heading-greeting').textContent = greeting;
+    document.getElementById('heading-staff-name').textContent = firstName;
     document.getElementById('role-label').textContent = roleName;
     document.getElementById('profile-button').textContent = initials;
     document.getElementById('branch-label').textContent = this.session.branch || 'Branch';
@@ -67,8 +68,6 @@ const MySpace = {
   bind() {
     const dialog = document.getElementById('personalize-dialog');
     document.getElementById('personalize-button').addEventListener('click', () => this.openPersonalization());
-    document.querySelector('.customize-shortcuts').addEventListener('click', () => this.openPersonalization());
-    document.getElementById('add-shortcut').addEventListener('click', () => this.addCustomShortcut());
     document.getElementById('save-personalization').addEventListener('click', event => {
       event.preventDefault();
       this.savePersonalization();
@@ -116,7 +115,7 @@ const MySpace = {
     const host = document.getElementById('resume-work');
     const order = this.activeMine[0];
     if (!order) {
-      host.innerHTML = '<div class="space-empty compact">No active job is assigned to you. Open My Bench when a job is assigned.</div>';
+      host.innerHTML = '<div class="space-empty compact">No active job</div>';
       return;
     }
     const machine = ServiceUI.machine(order);
@@ -230,8 +229,6 @@ const MySpace = {
   openPersonalization() {
     this.preferences = this.loadPreferences();
     document.getElementById('compact-mode').checked = this.preferences.compact;
-    this.renderShortcutSettings();
-    document.getElementById('shortcut-message').textContent = '';
     document.getElementById('personalize-dialog').showModal();
   },
 
@@ -288,10 +285,8 @@ const MySpace = {
 
   savePersonalization() {
     this.preferences.compact = document.getElementById('compact-mode').checked;
-    this.captureShortcutToggles();
     OS.set(this.preferenceKey, this.preferences);
     this.applyPreferences();
-    this.renderShortcuts();
     this.showToast('My Space updated.');
   },
 

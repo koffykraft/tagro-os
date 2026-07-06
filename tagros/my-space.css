@@ -195,3 +195,97 @@
   .space-main{padding-bottom:102px}
   .space-toast{bottom:88px}
 }
+
+/* Warm workshop redesign */
+.my-space-page{
+  --space-orange:var(--brand);
+  --space-orange-deep:var(--brand-dark);
+  --space-orange-soft:var(--brand-soft);
+  --space-text:var(--text-primary);
+  --space-muted:var(--text-secondary);
+  --space-line:var(--border);
+  --space-ground:var(--surface);
+}
+.space-brand img{height:48px}
+.space-sidebar,.space-topbar{background:#fff}
+.space-main{max-width:1180px}
+.space-heading h1{font-size:24px;font-weight:700;letter-spacing:-.02em}
+.space-heading>div>p:not(.space-greeting-line){margin-top:4px;color:var(--text-secondary);font-size:14px}
+.space-greeting-line{margin:0 0 4px!important;color:var(--text-secondary)!important;font-size:16px!important}
+.space-greeting-line strong{color:var(--text-primary);font-weight:600}
+.summary-card,.resume-card,.parked-card,.frequent-card{
+  border-color:var(--border);
+  border-radius:12px;
+  box-shadow:var(--card-shadow);
+  padding:16px;
+}
+.card-heading h2{font-size:18px;font-weight:600}
+.metric-box{border-color:var(--border);border-radius:10px}
+.metric-box strong{font-size:32px;font-weight:700}
+.metric-box small{font-size:14px}
+.card-link{color:var(--brand);font-weight:600}
+.resume-work{min-height:0}
+.resume-job{min-height:132px;border-color:var(--border);border-radius:10px;padding:16px}
+.resume-machine{font-size:17px;font-weight:600}
+.resume-complaint{color:var(--text-secondary);font-size:14px;font-weight:400}
+.resume-number{color:var(--text-muted);font-size:14px}
+.resume-button{min-height:48px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;background:var(--brand);font-size:16px;font-weight:600}
+.space-empty,.parked-empty{
+  min-height:56px;
+  max-height:80px;
+  border:0;
+  border-radius:8px;
+  background:#fff;
+  padding:12px 16px;
+  color:var(--text-muted);
+  font-size:14px;
+}
+.parked-list{display:flex;overflow-x:auto;scroll-snap-type:x proximity}
+.parked-item{min-width:220px;min-height:82px;scroll-snap-align:start;border-radius:10px}
+.parked-item strong{font-size:16px}.parked-item small{font-size:14px}
+.remove-parked{min-width:44px;min-height:44px;right:0;top:0}
+.frequent-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}
+.frequent-list a{
+  min-height:88px;
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  gap:12px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:12px;
+  background:#fff;
+  box-shadow:var(--card-shadow);
+}
+.frequent-list a:nth-child(2n){border-right:1px solid var(--border)}
+.frequent-list small{color:var(--text-primary);font-size:16px;font-weight:600}
+.frequent-icon{width:48px;height:48px;border-radius:12px}
+.mobile-menu-button,.profile-button{min-width:44px;min-height:44px}
+.outline-button,.save-personalization{border-radius:10px}
+
+@media(max-width:760px){
+  .space-topbar{height:64px;padding:0 16px}
+  .topbar-greeting{justify-content:center}
+  .space-main{padding:18px 16px 104px}
+  .space-heading{align-items:flex-start;margin-bottom:16px}
+  .space-heading h1{font-size:24px}
+  .space-heading>div>p:not(.space-greeting-line){font-size:14px}
+  .space-heading .outline-button{min-height:44px;padding:8px 12px;font-size:14px}
+  .space-grid{gap:12px}
+  .resume-card{order:1}
+  .summary-card:nth-of-type(2){order:2}
+  .summary-card:nth-of-type(1){order:3}
+  .parked-card{order:4}
+  .frequent-card{order:5}
+  .summary-card,.resume-card,.parked-card,.frequent-card{padding:16px}
+  .summary-card{min-height:0}
+  .metric-box{min-height:68px;margin:10px 0}
+  .metric-icon{font-size:32px}
+  .resume-job{min-height:116px}
+  .resume-machine-mark{display:none}
+  .parked-list{display:flex}
+  .parked-item{min-width:238px}
+  .frequent-list{grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}
+  .frequent-list a{min-width:0}
+  .mobile-bottom-nav{height:76px}
+}
