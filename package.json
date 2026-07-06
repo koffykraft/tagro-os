@@ -16,6 +16,7 @@
     "verify:history": "node scripts/verify-history.mjs",
     "verify:workspace": "node scripts/verify-workspace.mjs",
     "verify:parts": "node scripts/verify-parts-workflow.mjs",
+    "verify:customer-import": "node scripts/verify-customer-import.mjs",
     "deploy": "wrangler deploy --env=\"\" --strict",
     "deploy:staging": "wrangler deploy --env staging --strict",
     "deploy:dry-run": "wrangler deploy --env=\"\" --dry-run --strict",

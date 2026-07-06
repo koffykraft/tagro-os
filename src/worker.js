@@ -77,6 +77,10 @@ async function routeApi(request, env, url) {
     return catalogCorsResponse(request, await searchKnowledgeParts(env, url));
   }
 
+  if (url.pathname === '/api/admin/import-customers' && request.method === 'POST') {
+    return importCustomersAdmin(request, env);
+  }
+
   if (request.method === 'POST' && url.pathname === '/api/auth/login') {
     return login(request, env);
   }
@@ -578,6 +582,500 @@ async function bootstrap(request, env) {
   }
 
   return json({ ok: true, message: 'First owner and branch created.' }, 201);
+}
+
+const CUSTOMER_IMPORT_MAX_BYTES = 8 * 1024 * 1024;
+const CUSTOMER_IMPORT_MAX_CUSTOMERS = 2000;
+const CUSTOMER_IMPORT_MAX_MACHINES = 100;
+const CUSTOMER_IMPORT_MAX_JOBS = 100;
+const CUSTOMER_IMPORT_BATCH_STATEMENTS = 75;
+
+async function importCustomersAdmin(request, env) {
+  const configuredToken = String(env.OWNER_TOKEN || '');
+  if (!configuredToken) {
+    return json({ ok: false, error: 'Customer import is not configured.' }, 503);
+  }
+  const authorization = request.headers.get('Authorization') || '';
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  const suppliedToken = match ? match[1].trim() : '';
+  if (!suppliedToken || !safeEqual(suppliedToken, configuredToken)) {
+    return json({ ok: false, error: 'Not authorized.' }, 403);
+  }
+
+  let body;
+  try {
+    body = await readJsonLimited(request, CUSTOMER_IMPORT_MAX_BYTES);
+  } catch (error) {
+    return adminImportErrorResponse(error);
+  }
+  const branchCode = cleanText(body?.branch, 12).toUpperCase();
+  const sourceCustomers = body?.customers;
+  if (!branchCode) return json({ ok: false, error: 'Branch code is required.' }, 400);
+  if (!Array.isArray(sourceCustomers) || sourceCustomers.length === 0) {
+    return json({ ok: false, error: 'Add at least one customer to import.' }, 400);
+  }
+  if (sourceCustomers.length > CUSTOMER_IMPORT_MAX_CUSTOMERS) {
+    return json({
+      ok: false,
+      error: `Import no more than ${CUSTOMER_IMPORT_MAX_CUSTOMERS} customers per request.`
+    }, 413);
+  }
+
+  const branch = await env.DB.prepare(
+    'SELECT id, code, name FROM branches WHERE code = ? AND active = 1'
+  ).bind(branchCode).first();
+  if (!branch) return json({ ok: false, error: 'Active branch not found.' }, 404);
+
+  const actor = await env.DB.prepare(
+    `SELECT id, name FROM staff
+     WHERE role = 'owner' AND active = 1
+     ORDER BY created_at, id LIMIT 1`
+  ).first();
+  if (!actor) return json({ ok: false, error: 'No active owner is available to record this import.' }, 409);
+
+  const modelResult = await env.DB.prepare(
+    `SELECT mm.id, mm.model_name, mk.name AS make_name
+     FROM machine_models mm
+     JOIN machine_makes mk ON mk.id = mm.make_id
+     WHERE mm.active = 1 AND mk.active = 1`
+  ).all();
+  const modelMap = new Map();
+  for (const model of modelResult.results || []) {
+    modelMap.set(importModelKey(model.model_name), model);
+  }
+
+  const existingResult = await env.DB.prepare(
+    `SELECT identity_value AS phone
+     FROM customer_identity_keys
+     WHERE identity_type = 'phone'
+     UNION
+     SELECT phone
+     FROM customers
+     WHERE active = 1 AND record_kind = 'customer' AND phone IS NOT NULL`
+  ).all();
+  const seenPhones = new Set(
+    (existingResult.results || []).map(row => importPhoneKey(row.phone)).filter(Boolean)
+  );
+
+  const groups = [];
+  const skipped = [];
+  let skippedCustomers = 0;
+  for (let index = 0; index < sourceCustomers.length; index += 1) {
+    try {
+      const customer = importCustomerInput(sourceCustomers[index], index);
+      const phoneKey = importPhoneKey(customer.phone);
+      if (seenPhones.has(phoneKey)) {
+        skippedCustomers += 1;
+        if (skipped.length < 100) {
+          skipped.push({
+            index,
+            name: customer.name,
+            phone: customer.phone,
+            reason: 'duplicate_phone'
+          });
+        }
+        continue;
+      }
+      const group = buildCustomerImportGroup(
+        env,
+        customer,
+        branch,
+        actor,
+        modelMap
+      );
+      groups.push(group);
+      seenPhones.add(phoneKey);
+    } catch (error) {
+      skippedCustomers += 1;
+      if (skipped.length < 100) {
+        skipped.push({
+          index,
+          name: cleanText(sourceCustomers[index]?.name, 140) || null,
+          phone: cleanText(sourceCustomers[index]?.phone, 30) || null,
+          reason: errorMessage(error)
+        });
+      }
+    }
+  }
+
+  const created = { customers: 0, machines: 0, jobs: 0 };
+  let chunkStatements = [];
+  let chunkGroups = [];
+  const commitChunk = async () => {
+    if (!chunkStatements.length) return;
+    await env.DB.batch(chunkStatements);
+    for (const group of chunkGroups) {
+      created.customers += 1;
+      created.machines += group.machineCount;
+      created.jobs += group.jobCount;
+    }
+    chunkStatements = [];
+    chunkGroups = [];
+  };
+
+  try {
+    for (const group of groups) {
+      if (
+        chunkStatements.length &&
+        chunkStatements.length + group.statements.length > CUSTOMER_IMPORT_BATCH_STATEMENTS
+      ) {
+        await commitChunk();
+      }
+      chunkStatements.push(...group.statements);
+      chunkGroups.push(group);
+      if (chunkStatements.length >= CUSTOMER_IMPORT_BATCH_STATEMENTS) {
+        await commitChunk();
+      }
+    }
+    await commitChunk();
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: 'admin.customer_import_failed',
+      branch: branch.code,
+      created,
+      skippedCustomers,
+      error: errorMessage(error)
+    }));
+    return json({
+      ok: false,
+      code: 'CUSTOMER_IMPORT_PARTIAL',
+      error: 'The import stopped before completion. Retry the same file; existing phone numbers will be skipped safely.',
+      branch: branch.code,
+      requestedCustomers: sourceCustomers.length,
+      createdCustomers: created.customers,
+      skippedCustomers,
+      createdMachines: created.machines,
+      createdJobs: created.jobs,
+      skipped
+    }, 500);
+  }
+
+  console.log(JSON.stringify({
+    event: 'admin.customers_imported',
+    branch: branch.code,
+    actorId: actor.id,
+    requestedCustomers: sourceCustomers.length,
+    createdCustomers: created.customers,
+    skippedCustomers,
+    createdMachines: created.machines,
+    createdJobs: created.jobs
+  }));
+  return json({
+    ok: true,
+    branch: branch.code,
+    requestedCustomers: sourceCustomers.length,
+    createdCustomers: created.customers,
+    skippedCustomers,
+    createdMachines: created.machines,
+    createdJobs: created.jobs,
+    skipped,
+    skippedDetailsTruncated: skippedCustomers > skipped.length
+  }, 201);
+}
+
+function importCustomerInput(value, index) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw customerRequestError(`Customer row ${index + 1} must be an object.`);
+  }
+  const name = boundedText(value.name, 140, `Customer row ${index + 1} name`);
+  const phone = normalizeImportPhone(value.phone, `Customer row ${index + 1} phone`);
+  const place = boundedText(value.place, 600, `Customer row ${index + 1} place`) || null;
+  if (name.length < 2) throw customerRequestError(`Customer row ${index + 1} name is required.`);
+  if (!phone) throw customerRequestError(`Customer row ${index + 1} phone is required.`);
+  const machines = Array.isArray(value.machines) ? value.machines : [];
+  const jobs = Array.isArray(value.jobs) ? value.jobs : [];
+  if (machines.length > CUSTOMER_IMPORT_MAX_MACHINES) {
+    throw customerRequestError(`Customer row ${index + 1} has too many machines.`);
+  }
+  if (jobs.length > CUSTOMER_IMPORT_MAX_JOBS) {
+    throw customerRequestError(`Customer row ${index + 1} has too many jobs.`);
+  }
+  return { name, phone, place, machines, jobs, rowNumber: index + 1 };
+}
+
+function buildCustomerImportGroup(env, customer, branch, actor, modelMap) {
+  const now = new Date().toISOString();
+  const customerId = makeId('customer');
+  const statements = [
+    env.DB.prepare(
+      `INSERT INTO customers
+        (id, customer_code, customer_type, name, phone, alternate_phone, email,
+         address, tax_id, notes, created_at, updated_at, created_branch_id,
+         created_by, active, record_kind)
+       VALUES (?, ?, 'individual', ?, ?, NULL, NULL, ?, NULL,
+         'Imported through owner customer import', ?, ?, ?, ?, 1, 'customer')`
+    ).bind(
+      customerId,
+      makeCustomerCode(),
+      customer.name,
+      customer.phone,
+      customer.place,
+      now,
+      now,
+      branch.id,
+      actor.id
+    ),
+    env.DB.prepare(
+      `INSERT INTO customer_identity_keys
+        (identity_type, identity_value, customer_id, created_at)
+       VALUES ('phone', ?, ?, ?)`
+    ).bind(customer.phone, customerId, now)
+  ];
+
+  const machineByExactKey = new Map();
+  const firstMachineByModel = new Map();
+  let machineCount = 0;
+  const addMachine = (modelValue, serialValue, source) => {
+    const model = importModel(modelValue, modelMap, customer.rowNumber);
+    const serial = boundedText(
+      serialValue,
+      120,
+      `Customer row ${customer.rowNumber} machine serial`
+    ).toUpperCase() || null;
+    const exactKey = `${model.id}|${serial || ''}`;
+    if (machineByExactKey.has(exactKey)) return machineByExactKey.get(exactKey);
+    if (!serial && firstMachineByModel.has(model.id)) return firstMachineByModel.get(model.id);
+    const machineId = makeId('customer_machine');
+    const machine = { id: machineId, model, serial };
+    statements.push(
+      env.DB.prepare(
+        `INSERT INTO customer_machines
+          (id, customer_id, machine_model_id, display_name, serial_number, notes,
+           provisional, active, first_seen_at, last_seen_at, created_by,
+           created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, 1, ?, ?, ?, ?, ?)`
+      ).bind(
+        machineId,
+        customerId,
+        model.id,
+        model.model_name,
+        serial,
+        source,
+        now,
+        now,
+        actor.id,
+        now,
+        now
+      ),
+      env.DB.prepare(
+        `INSERT INTO machine_ownership_history
+          (id, machine_id, customer_id, started_at, ended_at,
+           transferred_by, note, created_at)
+         VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`
+      ).bind(
+        makeId('ownership'),
+        machineId,
+        customerId,
+        now,
+        actor.id,
+        'Imported customer ownership',
+        now
+      )
+    );
+    machineByExactKey.set(exactKey, machine);
+    if (!firstMachineByModel.has(model.id)) firstMachineByModel.set(model.id, machine);
+    machineCount += 1;
+    return machine;
+  };
+
+  for (const value of customer.machines) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw customerRequestError(`Customer row ${customer.rowNumber} contains an invalid machine.`);
+    }
+    addMachine(value.model, value.serial, 'Imported from customer machine list');
+  }
+
+  let jobCount = 0;
+  for (const value of customer.jobs) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw customerRequestError(`Customer row ${customer.rowNumber} contains an invalid job.`);
+    }
+    const modelName = value.machine_model ?? value.model;
+    const model = importModel(modelName, modelMap, customer.rowNumber);
+    const serial = boundedText(
+      value.machine_serial ?? value.serial,
+      120,
+      `Customer row ${customer.rowNumber} job serial`
+    ).toUpperCase() || null;
+    const exactKey = `${model.id}|${serial || ''}`;
+    let machine = machineByExactKey.get(exactKey);
+    if (!machine && !serial) machine = firstMachineByModel.get(model.id);
+    if (!machine) {
+      machine = addMachine(model.model_name, serial, 'Created from imported service job');
+    }
+    const workAttended = boundedText(
+      value.work_attended,
+      3000,
+      `Customer row ${customer.rowNumber} work attended`
+    ) || 'Not Mentioned';
+    const openedAt = importReceivedDate(value.date_received, customer.rowNumber);
+    const importedStatus = boundedText(
+      value.status,
+      40,
+      `Customer row ${customer.rowNumber} job status`
+    ).toLowerCase() || null;
+    const jobId = makeId('job');
+    const eventData = JSON.stringify({
+      source: 'owner_customer_import',
+      importedStatus,
+      originalDateReceived: openedAt.slice(0, 10),
+      urgency: 'normal',
+      accessories: []
+    });
+    statements.push(
+      env.DB.prepare(
+        `INSERT INTO repair_jobs
+          (id, work_order, branch_id, customer_id, machine_model_id,
+           serial_number, reported_problem, opened_by, opened_at, updated_at,
+           customer_machine_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        jobId,
+        makeWorkOrder(branch.code),
+        branch.id,
+        customerId,
+        model.id,
+        serial,
+        workAttended,
+        actor.id,
+        openedAt,
+        openedAt,
+        machine.id
+      ),
+      env.DB.prepare(
+        `INSERT INTO work_order_details
+          (job_id, customer_name, customer_phone, customer_place,
+           machine_description, machine_model_id, serial_number,
+           accessories_json, complaint, observation, work_done, assigned_to,
+           billing_subtotal, billing_tax, billing_total, billing_note,
+           created_at, updated_at, updated_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, '[]', ?, NULL, NULL, NULL,
+           NULL, NULL, NULL, NULL, ?, ?, ?)`
+      ).bind(
+        jobId,
+        customer.name,
+        customer.phone,
+        customer.place,
+        model.model_name,
+        model.id,
+        serial,
+        workAttended,
+        openedAt,
+        openedAt,
+        actor.id
+      ),
+      env.DB.prepare(
+        `INSERT INTO job_events
+          (id, job_id, event_type, event_data_json, created_by,
+           created_at, server_received_at)
+         VALUES (?, ?, 'machine_received', ?, ?, ?, ?)`
+      ).bind(
+        makeId('event'),
+        jobId,
+        eventData,
+        actor.id,
+        openedAt,
+        now
+      )
+    );
+    jobCount += 1;
+  }
+
+  return { statements, machineCount, jobCount };
+}
+
+function importModel(value, modelMap, rowNumber) {
+  const key = importModelKey(value);
+  if (!key) throw customerRequestError(`Customer row ${rowNumber} machine model is required.`);
+  const model = modelMap.get(key);
+  if (!model) {
+    throw customerRequestError(`Customer row ${rowNumber} uses unknown model "${cleanText(value, 120)}".`);
+  }
+  return model;
+}
+
+function importModelKey(value) {
+  return cleanText(value, 120).replace(/\s+/g, ' ').toUpperCase();
+}
+
+function normalizeImportPhone(value, label) {
+  const normalized = normalizePhone(value, label);
+  if (!normalized) return null;
+  const digits = normalized.replace(/\D/g, '');
+  const canonical = digits.length === 12 && digits.startsWith('91')
+    ? digits.slice(2)
+    : digits;
+  if (!/^\d{10,15}$/.test(canonical)) {
+    throw customerRequestError(`${label} must contain 10 to 15 digits.`);
+  }
+  return canonical;
+}
+
+function importPhoneKey(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
+}
+
+function importReceivedDate(value, rowNumber) {
+  const date = boundedText(value, 10, `Customer row ${rowNumber} received date`);
+  if (!date) return new Date().toISOString();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw customerRequestError(`Customer row ${rowNumber} received date must use YYYY-MM-DD.`);
+  }
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
+    throw customerRequestError(`Customer row ${rowNumber} received date is invalid.`);
+  }
+  return parsed.toISOString();
+}
+
+async function readJsonLimited(request, maxBytes) {
+  const type = request.headers.get('Content-Type') || '';
+  if (!type.includes('application/json')) {
+    throw customerRequestError(
+      'Content-Type must be application/json.',
+      415,
+      'UNSUPPORTED_MEDIA_TYPE'
+    );
+  }
+  const declaredLength = Number(request.headers.get('Content-Length'));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw customerRequestError('Customer import file is too large.', 413, 'IMPORT_TOO_LARGE');
+  }
+  if (!request.body) throw customerRequestError('JSON body is required.');
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw customerRequestError('Customer import file is too large.', 413, 'IMPORT_TOO_LARGE');
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    throw customerRequestError('The customer import JSON is invalid.');
+  }
+}
+
+function adminImportErrorResponse(error) {
+  const status = Number(error?.status);
+  return json({
+    ok: false,
+    code: error?.code || 'INVALID_CUSTOMER_IMPORT',
+    error: errorMessage(error)
+  }, status >= 400 && status <= 599 ? status : 400);
 }
 
 async function login(request, env) {
