@@ -31,52 +31,22 @@ const AppShell = {
     root.querySelectorAll('[data-app-navigation]').forEach(container => this.renderNavigation(container, session));
   },
 
-  installCustomerSearch(root = document) {
-    if (!root.body?.matches('.jobs-page')) return;
-    if (root.getElementById('global-customer-search')) return;
-    const button = root.createElement('button');
-    button.id = 'global-customer-search';
-    button.className = 'global-customer-search';
-    button.type = 'button';
-    button.textContent = 'Find customer';
-    button.setAttribute('aria-label', 'Find a customer by name or phone');
-
+  installMobileMore(root = document) {
+    const button = root.getElementById('app-mobile-more');
+    if (!button || root.getElementById('app-more-dialog')) return;
     const dialog = root.createElement('dialog');
-    dialog.className = 'global-customer-dialog';
-    dialog.innerHTML = '<form method="dialog" class="global-customer-card"><div class="global-customer-head"><div><strong>Find customer</strong><small>Name or phone</small></div><button value="cancel" aria-label="Close">×</button></div><input class="control" id="global-customer-query" type="search" autocomplete="off" placeholder="Customer name or phone"><div id="global-customer-results" class="global-customer-results"><span>Type at least two characters.</span></div></form>';
-    root.body.append(button, dialog);
-
-    const input = dialog.querySelector('#global-customer-query');
-    const results = dialog.querySelector('#global-customer-results');
-    let timer;
-    button.addEventListener('click', () => {
-      dialog.showModal();
-      input.focus();
+    dialog.id = 'app-more-dialog';
+    dialog.className = 'app-more-dialog';
+    dialog.innerHTML = '<div class="app-more-card"><div class="app-more-head"><strong>More</strong><button type="button" data-close-more aria-label="Close">×</button></div><nav data-app-navigation="drawer" aria-label="More tools"></nav></div>';
+    root.body.append(dialog);
+    button.addEventListener('click', () => dialog.showModal());
+    dialog.querySelector('[data-close-more]').addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', event => {
+      if (event.target === dialog) dialog.close();
     });
-    input.addEventListener('input', () => {
-      clearTimeout(timer);
-      timer = setTimeout(async () => {
-        const query = input.value.trim();
-        if (query.length < 2) {
-          results.innerHTML = '<span>Type at least two characters.</span>';
-          return;
-        }
-        results.innerHTML = '<span>Searching…</span>';
-        try {
-          const data = await Api.request('/customers?limit=8&query=' + encodeURIComponent(query));
-          results.innerHTML = (data.customers || []).length
-            ? data.customers.map(customer =>
-                '<a href="app-customers.html?customer=' + encodeURIComponent(customer.id) + '"><strong>' +
-                OS.esc(customer.name) + '</strong><small>' +
-                OS.esc([customer.phone, customer.address].filter(Boolean).join(' · ')) + '</small></a>'
-              ).join('')
-            : '<span>No matching customer.</span>';
-        } catch (error) {
-          results.innerHTML = '<span>' + OS.esc(error.message) + '</span>';
-        }
-      }, 220);
-    });
+    const session = Session.get();
+    if (session) this.renderNavigation(dialog.querySelector('[data-app-navigation]'), session);
   }
 };
 
-window.addEventListener('DOMContentLoaded', () => AppShell.installCustomerSearch());
+window.addEventListener('DOMContentLoaded', () => AppShell.installMobileMore());

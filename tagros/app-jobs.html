@@ -10,16 +10,15 @@
   <link rel="stylesheet" href="service.css">
   <link rel="stylesheet" href="os-design-system.css">
 </head>
-<body class="jobs-page">
+<body class="jobs-page repair-jobs-page">
   <header class="service-header"></header>
   <main class="service-main">
     <div class="screen-bar">
       <a class="back-link" href="index.html" aria-label="Back">←</a>
       <div class="screen-bar-main">
-        <div class="screen-title" id="list-title">Repair Jobs</div>
+        <div class="screen-title">Repair Jobs</div>
         <div class="save-state" id="list-count">Loading workshop…</div>
       </div>
-      <a class="primary-button" href="receive.html" style="text-decoration:none">＋ Receive</a>
     </div>
     <div class="filters jobs-filters">
       <label class="jobs-search">
@@ -38,42 +37,55 @@
         <option value="ready">Ready</option>
         <option value="returned">Returned</option>
       </select>
-      <input class="control" id="date-from" type="date" aria-label="From date">
-      <input class="control" id="date-to" type="date" aria-label="To date">
-      <select class="control hidden" id="mechanic-filter" aria-label="Mechanic"><option value="">Every mechanic</option></select>
+      <select class="control" id="mechanic-filter" aria-label="Mechanic">
+        <option value="">Every mechanic</option>
+        <option value="unassigned">Unassigned</option>
+      </select>
     </div>
     <div class="job-list" id="job-list"><div class="empty">Loading work orders…</div></div>
   </main>
-  <nav class="jobs-mobile-nav" data-app-navigation="mobile-core" data-active-app="jobs" aria-label="Mobile navigation"></nav>
+  <nav class="jobs-mobile-nav" data-app-navigation="mobile-core" data-active-app="jobs" aria-label="Mobile navigation">
+    <button id="app-mobile-more" data-app-nav-static type="button"><span>•••</span>More</button>
+  </nav>
   <script src="os-manifest.js"></script><script src="os-core.js"></script><script src="app-shell.js"></script><script src="service-ui.js"></script>
   <script>
-  let listSession=null,loadTimer=null;
+  let listSession=null,loadTimer=null,allOrders=[];
+  function renderMechanics(orders){
+    const select=document.getElementById('mechanic-filter'),selected=select.value;
+    const people=new Map();
+    orders.forEach(order=>{if(order.assignedTo&&order.assignedToName)people.set(order.assignedTo,order.assignedToName)});
+    select.innerHTML='<option value="">Every mechanic</option><option value="unassigned">Unassigned</option>'+
+      [...people].sort((a,b)=>a[1].localeCompare(b[1])).map(([id,name])=>'<option value="'+ServiceUI.esc(id)+'">'+ServiceUI.esc(name)+'</option>').join('');
+    if([...select.options].some(option=>option.value===selected))select.value=selected;
+  }
+  function renderJobs(){
+    const mechanic=document.getElementById('mechanic-filter').value;
+    const orders=allOrders.filter(order=>!mechanic||(mechanic==='unassigned'?!order.assignedTo:order.assignedTo===mechanic));
+    document.getElementById('list-count').textContent=orders.length+' work order'+(orders.length===1?'':'s');
+    const statusOrder=['received','inspecting','awaiting_approval','repairing','paused','waiting_parts','ready','returned','cancelled'];
+    const groups=statusOrder.map(key=>[key,orders.filter(item=>item.status===key)]).filter(([,items])=>items.length);
+    document.getElementById('job-list').innerHTML=groups.length
+      ? groups.map(([,items])=>'<section class="job-group"><div class="job-group-head"><h2>'+ServiceUI.esc(items[0].statusLabel)+'</h2><span>'+items.length+'</span></div>'+items.map(item=>ServiceUI.jobCard(item)).join('')+'</section>').join('')
+      : '<div class="empty">No jobs found.</div>';
+  }
   async function loadJobs(){
     const query=document.getElementById('job-search').value.trim(),status=document.getElementById('status-filter').value;
     const params=new URLSearchParams({limit:'200'});if(query)params.set('query',query);if(!['all','active'].includes(status))params.set('status',status);
-    const dateFrom=document.getElementById('date-from').value,dateTo=document.getElementById('date-to').value,mechanic=document.getElementById('mechanic-filter').value;
-    if(dateFrom)params.set('dateFrom',dateFrom);if(dateTo)params.set('dateTo',dateTo);if(mechanic)params.set('mechanic',mechanic);
-    if(new URLSearchParams(location.search).get('mine')==='1')params.set('mine','1');
-    const list=document.getElementById('job-list');list.innerHTML='<div class="empty">Finding work orders…</div>';
+    document.getElementById('job-list').innerHTML='<div class="empty">Finding work orders…</div>';
     try{
-      const data=await Api.request('/work-orders?'+params);let orders=data.workOrders||[];
-      if(status==='active')orders=orders.filter(order=>!['returned','cancelled'].includes(order.status));
-      document.getElementById('list-count').textContent=orders.length+' work order'+(orders.length===1?'':'s');
-      const statusOrder=['received','inspecting','awaiting_approval','repairing','paused','waiting_parts','ready','returned','cancelled'];
-      const groups=statusOrder.map(key=>[key,orders.filter(item=>item.status===key)]).filter(([,items])=>items.length);
-      list.innerHTML=groups.length?groups.map(([,items])=>'<section class="job-group"><div class="job-group-head"><h2>'+ServiceUI.esc(items[0].statusLabel)+'</h2><span>'+items.length+'</span></div>'+items.map(item=>ServiceUI.jobCard(item)).join('')+'</section>').join(''):'<div class="empty">No jobs found</div>';
-    }catch(error){list.innerHTML='<div class="empty">'+ServiceUI.esc(error.message)+'</div>'}
+      const data=await Api.request('/work-orders?'+params);allOrders=data.workOrders||[];
+      if(status==='active')allOrders=allOrders.filter(order=>!['returned','cancelled'].includes(order.status));
+      renderMechanics(allOrders);renderJobs();
+    }catch(error){document.getElementById('job-list').innerHTML='<div class="empty">'+ServiceUI.esc(error.message)+'</div>'}
   }
   (async()=>{
-    listSession=await ServiceUI.session();if(!listSession)return;ServiceUI.header(listSession);
-    const params=new URLSearchParams(location.search);
-    if(params.get('query'))document.getElementById('job-search').value=params.get('query');
-    if(params.get('mine')==='1'){document.getElementById('list-title').textContent='My Bench';document.title='My Bench — TAGRO';document.querySelector('.jobs-mobile-nav').dataset.activeApp='bench'}
-    AppShell.renderAll(listSession);
+    listSession=await ServiceUI.session();if(!listSession)return;ServiceUI.header(listSession);AppShell.renderAll(listSession);
+    const params=new URLSearchParams(location.search);if(params.get('query'))document.getElementById('job-search').value=params.get('query');
     if(params.get('status'))document.getElementById('status-filter').value=params.get('status');
-    if(['manager','owner'].includes(String(listSession.role).toLowerCase())){const select=document.getElementById('mechanic-filter');try{const data=await Api.request('/staff');select.innerHTML='<option value="">Every mechanic</option>'+(data.staff||[]).filter(item=>item.active!==0).map(item=>'<option value="'+ServiceUI.esc(item.id)+'">'+ServiceUI.esc(item.name)+'</option>').join('');select.classList.remove('hidden')}catch{}}
     document.getElementById('job-search').addEventListener('input',()=>{clearTimeout(loadTimer);loadTimer=setTimeout(loadJobs,350)});
-    ['status-filter','date-from','date-to','mechanic-filter'].forEach(id=>document.getElementById(id).addEventListener('change',loadJobs));await loadJobs();
+    document.getElementById('status-filter').addEventListener('change',loadJobs);
+    document.getElementById('mechanic-filter').addEventListener('change',renderJobs);
+    await loadJobs();
   })();
   </script>
 </body>

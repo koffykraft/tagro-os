@@ -50,8 +50,16 @@
 @media(max-width:900px){.po-layout{grid-template-columns:1fr}.po-order-list{max-height:260px}.po-settings{grid-template-columns:1fr 1fr}.po-settings .grow{grid-column:1/-1}}@media(max-width:640px){.po-settings{grid-template-columns:1fr}.po-settings .grow{grid-column:auto}.po-lines th:nth-child(2),.po-lines td:nth-child(2),.po-lines th:nth-child(4),.po-lines td:nth-child(4){display:none}.po-actions button{width:100%}}
 .customer-record-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:16px}.customer-record-summary>span{padding:11px;border:1px solid var(--line);border-radius:12px;background:#faf9f7}.customer-record-summary strong,.customer-record-summary small{display:block}.customer-record-summary strong{font-size:15px}.customer-record-summary small{margin-top:3px;color:var(--muted);font-size:8px;text-transform:uppercase}
 @media(max-width:480px){.customer-record-summary{grid-template-columns:1fr}.customer-record-summary>span{display:flex;align-items:center;justify-content:space-between}.customer-record-summary small{margin:0}}
-.global-customer-search{position:fixed;z-index:55;right:18px;bottom:18px;min-height:44px;padding:0 15px;border:1px solid #efc2ad;border-radius:99px;background:#fff7ed;color:var(--orange-deep);box-shadow:0 8px 24px rgba(28,25,23,.14);font-size:11px;font-weight:900}.global-customer-dialog{width:min(92vw,520px);padding:0;border:0;border-radius:18px;box-shadow:0 24px 70px rgba(28,25,23,.24)}.global-customer-dialog::backdrop{background:rgba(28,25,23,.48)}.global-customer-card{padding:18px}.global-customer-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}.global-customer-head strong,.global-customer-head small{display:block}.global-customer-head small{margin-top:3px;color:var(--muted);font-size:9px}.global-customer-head button{width:38px;height:38px;border:0;border-radius:10px;background:#f5f5f4;font-size:18px}.global-customer-results{display:grid;max-height:50vh;margin-top:10px;overflow:auto}.global-customer-results>a{padding:11px;border-bottom:1px solid var(--line);color:var(--ink);text-decoration:none}.global-customer-results>a:hover{background:#fffaf7}.global-customer-results strong,.global-customer-results small{display:block}.global-customer-results strong{font-size:12px}.global-customer-results small,.global-customer-results>span{margin-top:3px;color:var(--muted);font-size:10px}.global-customer-results>span{padding:12px}
-@media(max-width:760px){.global-customer-search{right:12px;bottom:76px}}
+.app-more-dialog{width:min(92vw,440px);padding:0;border:0;border-radius:18px;box-shadow:0 24px 70px rgba(28,25,23,.24)}
+.app-more-dialog::backdrop{background:rgba(28,25,23,.48)}
+.app-more-card{padding:18px}
+.app-more-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.app-more-head strong{font-size:20px}
+.app-more-head button{width:44px;height:44px;border:0;border-radius:10px;background:#f5f5f4;font-size:22px}
+.app-more-card nav{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.app-more-card nav a{min-height:52px;display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:10px;color:var(--ink);font-size:15px;text-decoration:none}
+.app-more-card nav a.active{border-color:var(--orange);color:var(--orange-deep)}
+.app-more-card .nav-icon{font-size:18px}
 .status-returned{background:#e8f7f4;color:#176b5c}.status-fill-returned{background:#238c7a}
 
 /* Workshop readability: shared minimums for every TAGRO OS application. */
@@ -60,21 +68,19 @@ button,input,select,textarea{font-size:16px}
 button,.secondary-button,.primary-button,.save-button,.link-button{min-height:44px;font-size:16px}
 .app-topbar-title strong,.app-name,.customer-main strong,.detail-item div,.item-name-cell strong,
 .model-card strong,.job-row-top strong,.job-facts p,.staff-card-top strong,.po-order-card strong,
-.po-part-result strong,.customer-document-row strong,.global-customer-results strong{font-size:16px}
+.po-part-result strong,.customer-document-row strong{font-size:16px}
 .detail-name,.job-hero h3{font-size:20px;font-weight:600}
 .app-topbar-title span,.customer-main span,.customer-code,.detail-code,.model-group-head span,
 .model-card span,.model-card p,.item-name-cell span,.job-machine,.job-row-foot,.status-pill,
 .job-hero p,.job-facts label,.timeline-event span,.timeline-event small,.po-order-card small,
-.po-number,.po-part-result small,.customer-document-row small,.global-customer-results small,
-.global-customer-results>span{font-size:14px}
+.po-number,.po-part-result small,.customer-document-row small{font-size:14px}
 .panel-head,.panel-body,.search-panel,.modal-body,.customer-row,.job-row,.staff-card,.model-card,
 .po-order-card,.po-part-result,.customer-document-row{padding:16px}
 .panel-head h2,.section-title h2,.timeline-head h4,.field label,.detail-item label{font-size:14px}
-.customer-row,.job-row,.global-customer-results>a{min-height:44px}
+.customer-row,.job-row{min-height:44px}
 .empty-state p,.inline-message,.assistant-box,.checkbox-row strong{font-size:16px}
 .text-button{min-height:44px;padding:10px 12px;font-size:16px}
 .toast,.form-message{font-size:16px;line-height:1.5}
-.global-customer-search{min-height:44px;font-size:16px}
 .back-button{width:44px;height:44px}
 .app-topbar .brand-logo{min-height:44px}
 @media(max-width:760px){

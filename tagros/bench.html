@@ -1,5 +1,52 @@
 <!doctype html>
 <html lang="en-IN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>My Bench — TAGRO</title></head>
-<body><script>location.replace('app-jobs.html?mine=1')</script></body>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>My Bench — TAGRO</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="os-shell.css">
+  <link rel="stylesheet" href="service.css">
+  <link rel="stylesheet" href="os-design-system.css">
+</head>
+<body class="jobs-page bench-page">
+  <header class="service-header"></header>
+  <main class="service-main">
+    <div class="screen-bar">
+      <a class="back-link" href="index.html" aria-label="Back">←</a>
+      <div class="screen-bar-main">
+        <div class="screen-title">My Bench</div>
+        <div class="save-state" id="list-count">Loading your work…</div>
+      </div>
+    </div>
+    <div class="job-list" id="job-list"><div class="empty">Loading assigned jobs…</div></div>
+  </main>
+  <nav class="jobs-mobile-nav" data-app-navigation="mobile-core" data-active-app="bench" aria-label="Mobile navigation">
+    <button id="app-mobile-more" data-app-nav-static type="button"><span>•••</span>More</button>
+  </nav>
+  <script src="os-manifest.js"></script><script src="os-core.js"></script><script src="app-shell.js"></script><script src="service-ui.js"></script>
+  <script>
+  (async()=>{
+    const session=await ServiceUI.session();if(!session)return;ServiceUI.header(session);AppShell.renderAll(session);
+    const list=document.getElementById('job-list');
+    try{
+      const data=await Api.request('/work-orders?mine=1&limit=200');
+      const orders=(data.workOrders||[]).filter(order=>!['returned','cancelled'].includes(order.status));
+      document.getElementById('list-count').textContent=orders.length+' assigned machine'+(orders.length===1?'':'s');
+      const sections=[
+        ['Received',['received']],
+        ['Inspecting',['inspecting','awaiting_approval','paused']],
+        ['Repairing',['repairing']],
+        ['Waiting Parts',['waiting_parts']],
+        ['Ready',['ready']]
+      ];
+      const groups=sections.map(([label,statuses])=>[label,orders.filter(order=>statuses.includes(order.status))]).filter(([,items])=>items.length);
+      list.innerHTML=groups.length
+        ? groups.map(([label,items])=>'<section class="job-group"><div class="job-group-head"><h2>'+label+'</h2><span>'+items.length+'</span></div>'+items.map(item=>ServiceUI.jobCard(item)).join('')+'</section>').join('')
+        : '<div class="empty bench-empty">No jobs assigned. <a href="app-jobs.html">Take one from the queue.</a></div>';
+    }catch(error){list.innerHTML='<div class="empty">'+ServiceUI.esc(error.message)+'</div>'}
+  })();
+  </script>
+</body>
 </html>

@@ -145,7 +145,7 @@ textarea.control{min-height:112px;resize:vertical;line-height:1.45}
 .jobs-page .primary-button{min-height:48px;border-radius:10px;font-size:16px;font-weight:600}
 .jobs-filters{
   display:grid;
-  grid-template-columns:minmax(260px,1fr) repeat(4,minmax(128px,auto));
+  grid-template-columns:minmax(260px,1fr) repeat(2,minmax(150px,auto));
   align-items:center;
   gap:12px;
   margin:16px 0 24px;
@@ -237,11 +237,12 @@ textarea.control{min-height:112px;resize:vertical;line-height:1.45}
 }
 .jobs-page .empty:before{content:"▱";font-size:18px}
 .jobs-mobile-nav{display:none}
+.bench-empty{flex-wrap:wrap}
+.bench-empty a{color:var(--brand-dark);font-weight:600}
 
 @media(max-width:760px){
   .jobs-page .service-main{padding:16px 16px 120px}
   .jobs-page .service-header{height:64px}
-  .jobs-page .screen-bar .primary-button{padding:12px}
   .jobs-filters{grid-template-columns:1fr 1fr;margin-bottom:20px}
   .jobs-search{grid-column:1/-1}
   .jobs-filters>.control{width:100%;max-width:none}
@@ -261,17 +262,18 @@ textarea.control{min-height:112px;resize:vertical;line-height:1.45}
     background:rgba(255,255,255,.97);
     box-shadow:0 -5px 18px rgba(35,29,24,.08);
   }
-  .jobs-mobile-nav a{
+  .jobs-mobile-nav a,.jobs-mobile-nav button{
     min-height:44px;
     display:grid;
     place-items:center;
     align-content:center;
     gap:2px;
+    border:0;
+    background:transparent;
     color:var(--text-secondary);
     text-decoration:none;
     font-size:15px;
   }
   .jobs-mobile-nav .nav-icon{font-size:20px}
   .jobs-mobile-nav a.active{color:var(--brand);font-weight:600}
-  .jobs-page .global-customer-search{right:16px;bottom:92px}
 }
