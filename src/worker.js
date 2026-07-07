@@ -633,6 +633,7 @@ async function importCustomersAdmin(request, env) {
   ).first();
   if (!actor) return json({ ok: false, error: 'No active owner is available to record this import.' }, 409);
 
+  await ensureImportOtherModel(env);
   const modelResult = await env.DB.prepare(
     `SELECT mm.id, mm.model_name, mk.name AS make_name
      FROM machine_models mm
@@ -826,17 +827,23 @@ function buildCustomerImportGroup(env, customer, branch, actor, modelMap) {
   const firstMachineByModel = new Map();
   let machineCount = 0;
   const addMachine = (modelValue, serialValue, source) => {
-    const model = importModel(modelValue, modelMap, customer.rowNumber);
+    const resolved = importModel(modelValue, modelMap, customer.rowNumber);
+    const model = resolved.model;
     const serial = boundedText(
       serialValue,
       120,
       `Customer row ${customer.rowNumber} machine serial`
     ).toUpperCase() || null;
-    const exactKey = `${model.id}|${serial || ''}`;
+    const exactKey = importMachineKey(model, serial, resolved.originalModelName);
     if (machineByExactKey.has(exactKey)) return machineByExactKey.get(exactKey);
-    if (!serial && firstMachineByModel.has(model.id)) return firstMachineByModel.get(model.id);
+    if (!serial && !resolved.originalModelName && firstMachineByModel.has(model.id)) {
+      return firstMachineByModel.get(model.id);
+    }
     const machineId = makeId('customer_machine');
-    const machine = { id: machineId, model, serial };
+    const machine = { id: machineId, model, serial, originalModelName: resolved.originalModelName };
+    const note = resolved.originalModelName
+      ? `${source}; original imported model "${resolved.originalModelName}" marked OTHER for later model setup`
+      : source;
     statements.push(
       env.DB.prepare(
         `INSERT INTO customer_machines
@@ -850,7 +857,7 @@ function buildCustomerImportGroup(env, customer, branch, actor, modelMap) {
         model.id,
         model.model_name,
         serial,
-        source,
+        note,
         now,
         now,
         actor.id,
@@ -891,17 +898,18 @@ function buildCustomerImportGroup(env, customer, branch, actor, modelMap) {
       throw customerRequestError(`Customer row ${customer.rowNumber} contains an invalid job.`);
     }
     const modelName = value.machine_model ?? value.model;
-    const model = importModel(modelName, modelMap, customer.rowNumber);
+    const resolved = importModel(modelName, modelMap, customer.rowNumber);
+    const model = resolved.model;
     const serial = boundedText(
       value.machine_serial ?? value.serial,
       120,
       `Customer row ${customer.rowNumber} job serial`
     ).toUpperCase() || null;
-    const exactKey = `${model.id}|${serial || ''}`;
+    const exactKey = importMachineKey(model, serial, resolved.originalModelName);
     let machine = machineByExactKey.get(exactKey);
-    if (!machine && !serial) machine = firstMachineByModel.get(model.id);
+    if (!machine && !serial && !resolved.originalModelName) machine = firstMachineByModel.get(model.id);
     if (!machine) {
-      machine = addMachine(model.model_name, serial, 'Created from imported service job');
+      machine = addMachine(modelName, serial, 'Created from imported service job');
     }
     const workAttended = boundedText(
       value.work_attended,
@@ -918,6 +926,7 @@ function buildCustomerImportGroup(env, customer, branch, actor, modelMap) {
     const eventData = JSON.stringify({
       source: 'owner_customer_import',
       importedStatus,
+      originalModelName: resolved.originalModelName || machine.originalModelName || null,
       originalDateReceived: openedAt.slice(0, 10),
       urgency: 'normal',
       accessories: []
@@ -984,18 +993,62 @@ function buildCustomerImportGroup(env, customer, branch, actor, modelMap) {
   return { statements, machineCount, jobCount };
 }
 
+async function ensureImportOtherModel(env) {
+  const specifications = JSON.stringify({
+    reviewRequired: true,
+    source: 'owner_customer_import',
+    note: 'Fallback model used when an imported model is not yet registered.'
+  });
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT OR IGNORE INTO machine_makes (id, name, active) VALUES ('make_other', 'Other', 1)"
+    ),
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO machine_models
+        (id, make_id, model_name, machine_type, specifications_json, active)
+       VALUES (
+        'model_other',
+        (SELECT id FROM machine_makes WHERE name = 'Other' LIMIT 1),
+        'OTHER',
+        'Other',
+        ?,
+        1
+       )`
+    ).bind(specifications)
+  ]);
+}
+
 function importModel(value, modelMap, rowNumber) {
   const key = importModelKey(value);
   if (!key) throw customerRequestError(`Customer row ${rowNumber} machine model is required.`);
   const model = modelMap.get(key);
-  if (!model) {
+  if (model) return { model, originalModelName: null };
+  const fallback = modelMap.get('OTHER');
+  if (!fallback) {
     throw customerRequestError(`Customer row ${rowNumber} uses unknown model "${cleanText(value, 120)}".`);
   }
-  return model;
+  return { model: fallback, originalModelName: boundedText(value, 120, `Customer row ${rowNumber} machine model`) };
 }
 
 function importModelKey(value) {
-  return cleanText(value, 120).replace(/\s+/g, ' ').toUpperCase();
+  let key = cleanText(value, 120)
+    .replace(/^#+/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+  key = key.replace(/^STIHL\s*/i, '').trim();
+  key = key.replace(/^(MS|FS|BR|SR)\s*(\d{2,4})(\s*T)?$/i, (_, prefix, number, suffix = '') => (
+    `${prefix.toUpperCase()} ${number}${suffix ? ` ${suffix.trim().toUpperCase()}` : ''}`
+  ));
+  return key;
+}
+
+function importMachineKey(model, serial, originalModelName) {
+  return [
+    model.id,
+    serial || '',
+    importModelKey(originalModelName || '')
+  ].join('|');
 }
 
 function normalizeImportPhone(value, label) {

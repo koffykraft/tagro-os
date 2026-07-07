@@ -43,6 +43,12 @@ check(
   'active branch and owner audit actor are required'
 );
 check(
+  worker.includes('ensureImportOtherModel(env)') &&
+  worker.includes("'model_other'") &&
+  worker.includes('originalModelName'),
+  'unknown imported models fall back to OTHER while preserving the original model text'
+);
+check(
   worker.includes("FROM customer_identity_keys") &&
   worker.includes("identity_type = 'phone'") &&
   worker.includes('seenPhones.has(phoneKey)') &&
