@@ -608,7 +608,7 @@ async function importCustomersAdmin(request, env) {
   } catch (error) {
     return adminImportErrorResponse(error);
   }
-  const branchCode = cleanText(body?.branch, 12).toUpperCase();
+  const branchCode = cleanText(body?.branchCode ?? body?.branch, 12).toUpperCase();
   const sourceCustomers = body?.customers;
   if (!branchCode) return json({ ok: false, error: 'Branch code is required.' }, 400);
   if (!Array.isArray(sourceCustomers) || sourceCustomers.length === 0) {

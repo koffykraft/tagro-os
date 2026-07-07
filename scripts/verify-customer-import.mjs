@@ -28,6 +28,10 @@ check(
   'request JSON is read through a bounded stream'
 );
 check(
+  worker.includes('body?.branchCode ?? body?.branch'),
+  'customer import accepts documented branchCode field'
+);
+check(
   worker.includes('CUSTOMER_IMPORT_MAX_CUSTOMERS = 2000') &&
   worker.includes('CUSTOMER_IMPORT_MAX_MACHINES = 100') &&
   worker.includes('CUSTOMER_IMPORT_MAX_JOBS = 100'),
