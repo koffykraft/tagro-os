@@ -80,6 +80,9 @@ async function routeApi(request, env, url) {
   if (url.pathname === '/api/admin/import-customers' && request.method === 'POST') {
     return importCustomersAdmin(request, env);
   }
+  if (url.pathname === '/api/admin/import-machines' && request.method === 'POST') {
+    return importMachinesAdmin(request, env);
+  }
 
   if (request.method === 'POST' && url.pathname === '/api/auth/login') {
     return login(request, env);
@@ -589,18 +592,11 @@ const CUSTOMER_IMPORT_MAX_CUSTOMERS = 2000;
 const CUSTOMER_IMPORT_MAX_MACHINES = 100;
 const CUSTOMER_IMPORT_MAX_JOBS = 100;
 const CUSTOMER_IMPORT_BATCH_STATEMENTS = 75;
+const MACHINE_IMPORT_MAX_MACHINES = 2000;
 
 async function importCustomersAdmin(request, env) {
-  const configuredToken = String(env.OWNER_TOKEN || '');
-  if (!configuredToken) {
-    return json({ ok: false, error: 'Customer import is not configured.' }, 503);
-  }
-  const authorization = request.headers.get('Authorization') || '';
-  const match = authorization.match(/^Bearer\s+(.+)$/i);
-  const suppliedToken = match ? match[1].trim() : '';
-  if (!suppliedToken || !safeEqual(suppliedToken, configuredToken)) {
-    return json({ ok: false, error: 'Not authorized.' }, 403);
-  }
+  const authResponse = authorizeOwnerImport(request, env, 'Customer import');
+  if (authResponse) return authResponse;
 
   let body;
   try {
@@ -772,6 +768,264 @@ async function importCustomersAdmin(request, env) {
     skipped,
     skippedDetailsTruncated: skippedCustomers > skipped.length
   }, 201);
+}
+
+async function importMachinesAdmin(request, env) {
+  const authResponse = authorizeOwnerImport(request, env, 'Machine import');
+  if (authResponse) return authResponse;
+
+  let body;
+  try {
+    body = await readJsonLimited(request, CUSTOMER_IMPORT_MAX_BYTES);
+  } catch (error) {
+    return adminImportErrorResponse(error);
+  }
+  const branchCode = cleanText(body?.branchCode ?? body?.branch, 12).toUpperCase();
+  const source = boundedText(body?.source || 'Owner machine import', 200, 'Machine import source');
+  const sourceMachines = body?.machines;
+  if (!branchCode) return json({ ok: false, error: 'Branch code is required.' }, 400);
+  if (!Array.isArray(sourceMachines) || sourceMachines.length === 0) {
+    return json({ ok: false, error: 'Add at least one machine to import.' }, 400);
+  }
+  if (sourceMachines.length > MACHINE_IMPORT_MAX_MACHINES) {
+    return json({
+      ok: false,
+      error: `Import no more than ${MACHINE_IMPORT_MAX_MACHINES} machines per request.`
+    }, 413);
+  }
+
+  const branch = await env.DB.prepare(
+    'SELECT id, code, name FROM branches WHERE code = ? AND active = 1'
+  ).bind(branchCode).first();
+  if (!branch) return json({ ok: false, error: 'Active branch not found.' }, 404);
+
+  const actor = await env.DB.prepare(
+    `SELECT id, name FROM staff
+     WHERE role = 'owner' AND active = 1
+     ORDER BY created_at, id LIMIT 1`
+  ).first();
+  if (!actor) return json({ ok: false, error: 'No active owner is available to record this import.' }, 409);
+
+  await ensureImportOtherModel(env);
+  const [modelResult, customerResult, serialResult] = await env.DB.batch([
+    env.DB.prepare(
+      `SELECT mm.id, mm.model_name, mk.name AS make_name
+       FROM machine_models mm
+       JOIN machine_makes mk ON mk.id = mm.make_id
+       WHERE mm.active = 1 AND mk.active = 1`
+    ),
+    env.DB.prepare(
+      `SELECT identity_value AS phone, c.id, c.name
+       FROM customer_identity_keys k
+       JOIN customers c ON c.id = k.customer_id
+       WHERE k.identity_type = 'phone' AND c.active = 1 AND c.record_kind = 'customer'
+       UNION
+       SELECT phone, id, name
+       FROM customers
+       WHERE active = 1 AND record_kind = 'customer' AND phone IS NOT NULL`
+    ),
+    env.DB.prepare(
+      `SELECT cm.id, cm.serial_number, cm.machine_model_id, mm.model_name,
+        cm.customer_id, c.phone AS customer_phone
+       FROM customer_machines cm
+       LEFT JOIN machine_models mm ON mm.id = cm.machine_model_id
+       LEFT JOIN customers c ON c.id = cm.customer_id
+       WHERE cm.active = 1 AND cm.serial_number IS NOT NULL AND cm.serial_number <> ''`
+    )
+  ]);
+
+  const modelMap = new Map();
+  for (const model of modelResult.results || []) modelMap.set(importModelKey(model.model_name), model);
+  const customerByPhone = new Map();
+  for (const customer of customerResult.results || []) {
+    const key = importPhoneKey(customer.phone);
+    if (key && !customerByPhone.has(key)) customerByPhone.set(key, customer);
+  }
+  const existingSerials = new Map();
+  for (const machine of serialResult.results || []) {
+    const key = importSerialKey(machine.serial_number);
+    if (key) existingSerials.set(key, machine);
+  }
+
+  const statements = [];
+  const skipped = [];
+  const seenSerials = new Map();
+  let createdMachines = 0;
+  let skippedMachines = 0;
+  const now = new Date().toISOString();
+  for (let index = 0; index < sourceMachines.length; index += 1) {
+    let machine;
+    try {
+      machine = importMachineInput(sourceMachines[index], index);
+    } catch (error) {
+      skippedMachines += 1;
+      if (skipped.length < 100) skipped.push(importMachineSkip(index, sourceMachines[index], errorMessage(error)));
+      continue;
+    }
+    const serialKey = importSerialKey(machine.serial);
+    const phoneKey = importPhoneKey(machine.customerPhone);
+    const customer = customerByPhone.get(phoneKey);
+    if (!customer) {
+      skippedMachines += 1;
+      if (skipped.length < 100) skipped.push(importMachineSkip(index, machine, 'customer_phone_not_found'));
+      continue;
+    }
+    if (existingSerials.has(serialKey)) {
+      skippedMachines += 1;
+      const existing = existingSerials.get(serialKey);
+      if (skipped.length < 100) {
+        skipped.push({
+          index,
+          model: machine.model,
+          serial: machine.serial,
+          customerPhone: machine.customerPhone,
+          reason: 'duplicate_serial_existing',
+          existingModel: existing.model_name || null,
+          existingCustomerPhone: existing.customer_phone || null
+        });
+      }
+      continue;
+    }
+    if (seenSerials.has(serialKey)) {
+      skippedMachines += 1;
+      if (skipped.length < 100) skipped.push(importMachineSkip(index, machine, 'duplicate_serial_in_request'));
+      continue;
+    }
+    const resolved = importModel(machine.model, modelMap, index + 1);
+    const model = resolved.model;
+    const machineId = makeId('customer_machine');
+    const note = [
+      `Machine import source: ${source}`,
+      `Relationship: ${machine.relationship}`,
+      `Confidence: ${machine.confidence}`,
+      'Ownership not confirmed; customer phone is service context only.',
+      machine.source ? `Row source: ${machine.source}` : '',
+      machine.sourceCustomerIndex !== null ? `Source customer index: ${machine.sourceCustomerIndex}` : '',
+      resolved.originalModelName ? `Original imported model: ${resolved.originalModelName}` : ''
+    ].filter(Boolean).join(' | ');
+    statements.push(env.DB.prepare(
+      `INSERT INTO customer_machines
+        (id, customer_id, machine_model_id, display_name, serial_number, notes,
+         provisional, active, first_seen_at, last_seen_at, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`
+    ).bind(
+      machineId,
+      customer.id,
+      model.id,
+      model.model_name,
+      machine.serial,
+      note,
+      resolved.originalModelName ? 1 : 0,
+      now,
+      now,
+      actor.id,
+      now,
+      now
+    ));
+    seenSerials.set(serialKey, machine);
+    existingSerials.set(serialKey, {
+      id: machineId,
+      serial_number: machine.serial,
+      model_name: model.model_name,
+      customer_phone: machine.customerPhone
+    });
+    createdMachines += 1;
+  }
+
+  try {
+    for (let offset = 0; offset < statements.length; offset += CUSTOMER_IMPORT_BATCH_STATEMENTS) {
+      await env.DB.batch(statements.slice(offset, offset + CUSTOMER_IMPORT_BATCH_STATEMENTS));
+    }
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: 'admin.machine_import_failed',
+      branch: branch.code,
+      actorId: actor.id,
+      requestedMachines: sourceMachines.length,
+      createdMachines,
+      skippedMachines,
+      error: errorMessage(error)
+    }));
+    return json({
+      ok: false,
+      code: 'MACHINE_IMPORT_PARTIAL',
+      error: 'The machine import stopped before completion. Retry the same file; existing serial numbers will be skipped safely.',
+      branch: branch.code,
+      requestedMachines: sourceMachines.length,
+      createdMachines,
+      skippedMachines,
+      skipped
+    }, 500);
+  }
+
+  console.log(JSON.stringify({
+    event: 'admin.machines_imported',
+    branch: branch.code,
+    actorId: actor.id,
+    requestedMachines: sourceMachines.length,
+    createdMachines,
+    skippedMachines
+  }));
+  return json({
+    ok: true,
+    branch: branch.code,
+    requestedMachines: sourceMachines.length,
+    createdMachines,
+    skippedMachines,
+    skipped,
+    skippedDetailsTruncated: skippedMachines > skipped.length
+  }, 201);
+}
+
+function authorizeOwnerImport(request, env, label) {
+  const configuredToken = String(env.OWNER_TOKEN || '');
+  if (!configuredToken) {
+    return json({ ok: false, error: `${label} is not configured.` }, 503);
+  }
+  const authorization = request.headers.get('Authorization') || '';
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  const suppliedToken = match ? match[1].trim() : '';
+  if (!suppliedToken || !safeEqual(suppliedToken, configuredToken)) {
+    return json({ ok: false, error: 'Not authorized.' }, 403);
+  }
+  return null;
+}
+
+function importMachineInput(value, index) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw customerRequestError(`Machine row ${index + 1} must be an object.`);
+  }
+  const model = boundedText(value.model, 120, `Machine row ${index + 1} model`);
+  const serial = normalizeImportSerial(value.serial, `Machine row ${index + 1} serial`);
+  const customerPhone = normalizeImportPhone(
+    value.customerPhone ?? value.phone,
+    `Machine row ${index + 1} customer phone`
+  );
+  if (!model) throw customerRequestError(`Machine row ${index + 1} model is required.`);
+  if (!serial) throw customerRequestError(`Machine row ${index + 1} serial is required.`);
+  if (!customerPhone) throw customerRequestError(`Machine row ${index + 1} customer phone is required.`);
+  const sourceCustomerIndex = Number(value.sourceCustomerIndex);
+  return {
+    model,
+    serial,
+    customerPhone,
+    customerName: boundedText(value.customerName, 140, `Machine row ${index + 1} customer name`) || null,
+    place: boundedText(value.place, 600, `Machine row ${index + 1} place`) || null,
+    relationship: boundedText(value.relationship, 80, `Machine row ${index + 1} relationship`) || 'service_context',
+    confidence: boundedText(value.confidence, 80, `Machine row ${index + 1} confidence`) || 'high',
+    source: boundedText(value.source, 200, `Machine row ${index + 1} source`) || null,
+    sourceCustomerIndex: Number.isFinite(sourceCustomerIndex) ? sourceCustomerIndex : null
+  };
+}
+
+function importMachineSkip(index, value, reason) {
+  return {
+    index,
+    model: cleanText(value?.model, 120) || null,
+    serial: cleanText(value?.serial, 120) || null,
+    customerPhone: cleanText(value?.customerPhone ?? value?.phone, 30) || null,
+    reason
+  };
 }
 
 function importCustomerInput(value, index) {
@@ -1062,6 +1316,19 @@ function normalizeImportPhone(value, label) {
     throw customerRequestError(`${label} must contain 10 to 15 digits.`);
   }
   return canonical;
+}
+
+function normalizeImportSerial(value, label) {
+  const serial = boundedText(value, 120, label)
+    .toUpperCase()
+    .replace(/[^A-Z0-9/-]/g, '');
+  if (!serial || ['NIL', 'NA', 'N/A', 'UNKNOWN', '0', '00', '000'].includes(serial)) return '';
+  if (serial.length < 4) throw customerRequestError(`${label} must be at least 4 characters.`);
+  return serial;
+}
+
+function importSerialKey(value) {
+  return String(value || '').toUpperCase().replace(/[^A-Z0-9/-]/g, '');
 }
 
 function importPhoneKey(value) {
