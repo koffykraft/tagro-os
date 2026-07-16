@@ -207,6 +207,20 @@ textarea.control{min-height:112px;resize:vertical;line-height:1.45}
 .job-customer{font-size:15px;font-weight:500}
 .job-meta{font-size:14px}
 .job-number{font-size:13px}
+.job-open-label{
+  display:inline-flex;
+  min-height:32px;
+  align-items:center;
+  justify-content:center;
+  margin-top:10px;
+  border-radius:999px;
+  padding:4px 10px;
+  background:var(--brand-soft);
+  color:var(--brand-dark);
+  font-size:12px;
+  font-weight:700;
+  white-space:nowrap;
+}
 .job-card-foot{align-items:center;font-size:14px}
 .age-badge{
   display:inline-flex;
@@ -248,6 +262,7 @@ textarea.control{min-height:112px;resize:vertical;line-height:1.45}
   .jobs-filters>.control{width:100%;max-width:none}
   .job-card{grid-template-columns:minmax(0,1fr);min-height:128px}
   .job-side{display:flex;align-items:center;justify-content:space-between;text-align:left}
+  .job-open-label{margin-top:0}
   .jobs-mobile-nav{
     position:fixed;
     z-index:40;

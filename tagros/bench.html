@@ -44,7 +44,7 @@
       const groups=sections.map(([label,statuses])=>[label,orders.filter(order=>statuses.includes(order.status))]).filter(([,items])=>items.length);
       list.innerHTML=groups.length
         ? groups.map(([label,items])=>'<section class="job-group"><div class="job-group-head"><h2>'+label+'</h2><span>'+items.length+'</span></div>'+items.map(item=>ServiceUI.jobCard(item)).join('')+'</section>').join('')
-        : '<div class="empty bench-empty">No jobs assigned. <a href="app-jobs.html">Take one from the queue.</a></div>';
+        : '<div class="empty bench-empty">No jobs assigned. No machines are on your bench yet. <a href="app-jobs.html">Open Workbench.</a></div>';
     }catch(error){list.innerHTML='<div class="empty">'+ServiceUI.esc(error.message)+'</div>'}
   })();
   </script>

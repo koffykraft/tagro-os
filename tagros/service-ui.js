@@ -26,7 +26,10 @@ const ServiceUI={
     });
   },
   jobCard(order){
-    return '<a class="job-card" data-status="'+this.esc(order.status||'received')+'" href="work.html?id='+encodeURIComponent(order.id)+'"><div class="job-main"><div class="job-title">'+this.esc(this.machine(order))+'</div><div class="job-customer">'+this.esc(this.customer(order))+'</div><div class="job-meta">'+this.esc(order.complaint||'Complaint not recorded')+'</div><div class="job-card-foot"><span class="age-badge">'+this.esc(this.age(order.openedAt))+'</span><span>'+this.esc(order.assignedToName||'Unassigned')+'</span></div></div><div class="job-side"><div class="job-number">'+this.esc(order.workOrder)+'</div><span class="status">'+this.esc(order.statusLabel)+'</span></div></a>';
+    const machine=this.machine(order);
+    const customer=this.customer(order);
+    const context=[customer,order.customerPlace].filter(Boolean).join(' · ');
+    return '<a class="job-card" data-status="'+this.esc(order.status||'received')+'" href="work.html?id='+encodeURIComponent(order.id)+'" aria-label="Open Workbench for '+this.esc(machine)+'"><div class="job-main"><div class="job-title">'+this.esc(machine)+'</div><div class="job-customer">'+this.esc(context||'Customer context pending')+'</div><div class="job-meta">'+this.esc(order.complaint||'Complaint not recorded')+'</div><div class="job-card-foot"><span class="age-badge">'+this.esc(this.age(order.openedAt))+'</span><span>'+this.esc(order.assignedToName||'Unassigned')+'</span></div></div><div class="job-side"><div class="job-number">'+this.esc(order.workOrder)+'</div><span class="status">'+this.esc(order.statusLabel)+'</span><span class="job-open-label">Open Workbench</span></div></a>';
   },
   debounce(fn,delay=500){let timer;return(...args)=>{clearTimeout(timer);timer=setTimeout(()=>fn(...args),delay)}}
 };

@@ -117,6 +117,7 @@ const JobWorkspace = {
     document.getElementById('job-status').textContent = order.statusLabel || this.title(order.status);
     document.getElementById('job-status').className = `workspace-status ${this.statusClass(order.status)}`;
     document.getElementById('job-assignee').textContent = order.assignedToName || 'Unassigned';
+    document.getElementById('job-last-update').textContent = this.lastUpdateText(order);
     document.getElementById('technician-name').textContent = order.assignedToName || 'Unassigned';
     this.ensureAssignedOption(order);
     this.renderProgress();
@@ -716,6 +717,14 @@ const JobWorkspace = {
     if (status === 'ready') return 'ready';
     if (['returned', 'cancelled'].includes(status)) return 'closed';
     return '';
+  },
+
+  lastUpdateText(order) {
+    const events = Array.isArray(order?.events) ? [...order.events] : [];
+    const latest = events.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+    if (!latest) return 'No timeline yet';
+    const when = ServiceUI.date(latest.created_at);
+    return `Last: ${this.eventLabel(latest.event_type)}${when ? ` · ${when}` : ''}`;
   },
 
   age(value) {
