@@ -14,6 +14,8 @@ const AppShell = {
       link.href = app.file;
       link.dataset.appNavItem = app.id;
       link.dataset.appId = app.id;
+      const plane = TAGRO_MANIFEST.planeForApp(app.id);
+      if (plane) link.dataset.workspacePlane = plane.id;
       if (app.id === activeId) {
         link.classList.add('active');
         link.setAttribute('aria-current', 'page');
@@ -23,6 +25,7 @@ const AppShell = {
       mark.setAttribute('aria-hidden', 'true');
       mark.textContent = app.navIcon || '•';
       link.append(mark, document.createTextNode(app.label));
+      link.addEventListener('click', () => Workspace.rememberDestination(app.id, link.href));
       container.insertBefore(link, container.querySelector('[data-app-nav-static]'));
     }
   },
