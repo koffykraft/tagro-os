@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import { routeIntegratedTools } from './integrated-tools.js';
 
 const SESSION_COOKIE = 'tagro_session';
 const SESSION_HOURS = 12;
@@ -98,6 +99,16 @@ async function routeApi(request, env, url) {
     const token = readCookie(request, SESSION_COOKIE);
     if (token) await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256(token)).run();
     return json({ ok: true }, 200, { 'Set-Cookie': expiredSessionCookie(env) });
+  }
+
+  if (url.pathname.startsWith('/api/warehouse/') || url.pathname.startsWith('/api/stock-count/')) {
+    const session = await getSession(request, env);
+    if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
+    if (!env.HISTORY_DB && url.pathname.startsWith('/api/warehouse/')) {
+      return json({ ok: false, error: 'Warehouse is not connected in this environment.' }, 503);
+    }
+    const response = await routeIntegratedTools(request, env, url, session);
+    if (response) return response;
   }
 
   const customerMachineResponse = await routeCustomerMachinesApi(request, env, url);
