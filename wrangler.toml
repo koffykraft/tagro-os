@@ -20,6 +20,11 @@ database_name = "tagro-os"
 database_id = "4f53e926-c25c-4279-aa14-8ca759a4ed4a"
 migrations_dir = "migrations"
 
+[[d1_databases]]
+binding = "HISTORY_DB"
+database_name = "tagro-history"
+database_id = "0b9aa09d-0c2f-482f-bf90-d390329ec0c9"
+
 [[kv_namespaces]]
 binding = "TAGRO_DATA"
 id = "3a0fd40900114bb1861163a861dcf7e1"
@@ -55,6 +60,12 @@ routes = []
   database_name = "tagro-os-staging"
   database_id = "ac5807d2-3e6a-4e10-b77e-68692e21f06a"
   migrations_dir = "migrations"
+
+  # Historical warehouse is immutable and is queried read-only by TAGRO OS.
+  [[env.staging.d1_databases]]
+  binding = "HISTORY_DB"
+  database_name = "tagro-history"
+  database_id = "0b9aa09d-0c2f-482f-bf90-d390329ec0c9"
 
   [[env.staging.kv_namespaces]]
   binding = "TAGRO_DATA"
