@@ -131,6 +131,68 @@ async function listStockCounts(env, url, session) {
   return jsonResponse({ ok: true, submissions: result.results || [] });
 }
 
+async function invoiceBranch(env, requested, session) {
+  const code = clean(requested, 12).toUpperCase();
+  if (!owner(session) && code !== branchCode(session)) return null;
+  return env.DB.prepare('select id,code from branches where code=? and active=1').bind(code).first();
+}
+
+async function saveMobileInvoice(request, env, session) {
+  const body = await request.json().catch(() => null);
+  const lines = Array.isArray(body?.lines) ? body.lines.slice(0, 200) : [];
+  const branch = await invoiceBranch(env, body?.branch, session);
+  if (!branch) return jsonResponse({ ok: false, error: 'Branch access is not allowed.' }, 403);
+  const id = clean(body?.id, 80);
+  const bill = clean(body?.bill, 80);
+  const date = clean(body?.date, 10);
+  if (!id || !bill || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !lines.length) {
+    return jsonResponse({ ok: false, error: 'Invoice id, number, date and item lines are required.' }, 400);
+  }
+  const existing = await env.DB.prepare('select id,branch_id,status,created_at from mobile_invoices where id=? or (branch_id=? and bill_no=?) limit 1')
+    .bind(id, branch.id, bill).first();
+  if (existing && existing.branch_id !== branch.id) return jsonResponse({ ok: false, error: 'Invoice identity belongs to another branch.' }, 409);
+  if (existing && ['written_to_busy','cancelled'].includes(existing.status)) return jsonResponse({ ok: false, error: 'This invoice is locked.' }, 409);
+  const now = new Date().toISOString();
+  const totals = body?.totals || {};
+  const taxable = Number(totals.taxable || 0), gst = Number(totals.gst || 0), total = Number(totals.total || 0);
+  if (![taxable,gst,total].every(Number.isFinite)) return jsonResponse({ ok: false, error: 'Invoice totals are invalid.' }, 400);
+  const normalized = lines.map((line, index) => {
+    const qty = Number(line.qty), rate = Number(line.rate), tax = Number(line.gst);
+    if (!clean(line.name,240) || ![qty,rate,tax].every(Number.isFinite) || qty <= 0 || rate < 0 || tax < 0) throw new Error('INVALID_MOBILE_INVOICE_LINE');
+    const before = qty * rate, taxAmount = before * tax / 100;
+    return { ...line, lineNo:index+1, qty, rate, gst:tax, before, taxAmount, total:before+taxAmount };
+  });
+  const invoiceId = existing?.id || id;
+  const payload = { ...body, id:invoiceId, branch:branch.code, lines:normalized, cloud_saved_at:now };
+  const createdAt = existing?.created_at || clean(body?.created,40) || now;
+  const statements = [
+    env.DB.prepare(`insert into mobile_invoices
+      (id,branch_id,staff_id,bill_no,invoice_date,series,account_name,customer_name,customer_phone,customer_place,machine_model,serial_number,narration,other_amount,taxable_amount,gst_amount,total_amount,status,payload_json,created_at,updated_at)
+      values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      on conflict(id) do update set bill_no=excluded.bill_no,invoice_date=excluded.invoice_date,series=excluded.series,account_name=excluded.account_name,
+      customer_name=excluded.customer_name,customer_phone=excluded.customer_phone,customer_place=excluded.customer_place,machine_model=excluded.machine_model,
+      serial_number=excluded.serial_number,narration=excluded.narration,other_amount=excluded.other_amount,taxable_amount=excluded.taxable_amount,
+      gst_amount=excluded.gst_amount,total_amount=excluded.total_amount,status='pending_busy_sync',payload_json=excluded.payload_json,updated_at=excluded.updated_at`)
+      .bind(invoiceId,branch.id,session.id,bill,date,clean(body?.series,40)||'MOBILE SALES',clean(body?.account,80)||'Cash',clean(body?.customer?.name,160),clean(body?.customer?.phone,30),clean(body?.customer?.place,160),clean(body?.customer?.machine,160),clean(body?.customer?.serial,100),clean(body?.note,1000),Number(body?.other||0),taxable,gst,total,'pending_busy_sync',JSON.stringify(payload),createdAt,now),
+    env.DB.prepare('delete from mobile_invoice_lines where invoice_id=?').bind(invoiceId),
+    ...normalized.map((line) => env.DB.prepare(`insert into mobile_invoice_lines
+      (id,invoice_id,line_no,item_code,item_name,item_group,quantity,unit_name,unit_rate,gst_rate,taxable_amount,gst_amount,total_amount)
+      values (?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(crypto.randomUUID(),invoiceId,line.lineNo,clean(line.alias,100),clean(line.name,240),clean(line.group,100),line.qty,clean(line.unit,30)||'Pcs',line.rate,line.gst,line.before,line.taxAmount,line.total))
+  ];
+  await env.DB.batch(statements);
+  return jsonResponse({ ok:true, invoiceId, bill, branch:branch.code, status:'pending_busy_sync', savedAt:now }, existing ? 200 : 201);
+}
+
+async function listMobileInvoices(env, url, session) {
+  const branch = await invoiceBranch(env, url.searchParams.get('branch'), session);
+  if (!branch) return jsonResponse({ ok:false, error:'Branch access is not allowed.' },403);
+  const date = clean(url.searchParams.get('date'),10);
+  const result = await env.DB.prepare(`select payload_json,status,created_at,updated_at,exported_at from mobile_invoices
+    where branch_id=? and (?='' or invoice_date=?) order by invoice_date,created_at`).bind(branch.id,date,date).all();
+  const invoices = (result.results||[]).map(row => ({...JSON.parse(row.payload_json),status:row.status,cloud_created_at:row.created_at,cloud_updated_at:row.updated_at,exported_at:row.exported_at}));
+  return jsonResponse({ok:true,branch:branch.code,date,invoices});
+}
+
 export async function routeIntegratedTools(request, env, url, session) {
   if (url.pathname === '/api/warehouse/branches' && request.method === 'GET') return warehouseBranches(env, session);
   if (url.pathname === '/api/warehouse/summary' && request.method === 'GET') return warehouseSummary(env, url, session);
@@ -139,5 +201,7 @@ export async function routeIntegratedTools(request, env, url, session) {
   if (detail && request.method === 'GET') return warehouseDetail(env, decodeURIComponent(detail[1]), session);
   if (url.pathname === '/api/stock-count/submissions' && request.method === 'POST') return submitStockCount(request, env, session);
   if (url.pathname === '/api/stock-count/submissions' && request.method === 'GET') return listStockCounts(env, url, session);
+  if (url.pathname === '/api/mobile-invoices' && request.method === 'POST') return saveMobileInvoice(request, env, session);
+  if (url.pathname === '/api/mobile-invoices' && request.method === 'GET') return listMobileInvoices(env, url, session);
   return null;
 }
