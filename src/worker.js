@@ -5815,7 +5815,6 @@ async function listKnowledgeModels(env) {
 async function searchKnowledgeParts(env, url) {
   if (!env.TAGRO_DATA) return json({ ok: false, error: 'TAGRO parts are not connected.' }, 503);
   const query = cleanText(url.searchParams.get('query'), 120).toLowerCase();
-  const modelKey = normalizeModelKey(url.searchParams.get('model'));
   const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 80, 1), 500);
   if (query.length < 2) {
     return json({ ok: false, error: 'Enter at least two search characters.' }, 400);
@@ -5834,17 +5833,11 @@ async function searchKnowledgeParts(env, url) {
       ? cleanStringList(part.aliases, 20, 240)
       : cleanStringList(String(part?.alias || '').split(','), 20, 240);
     if (!partNumber || !tagroName) continue;
-    const modelKeys = knowledgePartModelKeys({
-      tagroName, stihlName, aliases,
-      modelGroup: part?.modelGroup, models: part?.models
-    });
-    if (modelKey && modelKeys.size && !modelKeys.has(modelKey)) continue;
-    let score = flexiblePartScore(query, {
+    const score = flexiblePartScore(query, {
       partNumber, tagroName, stihlName, aliases,
       modelGroup: part?.modelGroup, models: part?.models
     });
     if (score < 0) continue;
-    if (modelKey && modelKeys.has(modelKey)) score += 50;
     results.push({
       partNumber,
       name: tagroName,
@@ -5872,7 +5865,7 @@ async function searchKnowledgeParts(env, url) {
     });
   return json({
     ok: true,
-    model: modelKey ? formatModelKey(modelKey) : null,
+    model: null,
     query,
     parts,
     totalMatches,
@@ -5970,23 +5963,6 @@ function normalizeModelKey(value) {
 
 function normalizePartNumber(value) {
   return cleanText(value, 100).toUpperCase().replace(/[^A-Z0-9]/g, '');
-}
-
-function knowledgePartModelKeys(part) {
-  const keys = new Set();
-  const values = [
-    part?.tagroName, part?.stihlName, part?.modelGroup,
-    ...(Array.isArray(part?.aliases) ? part.aliases : []),
-    ...(Array.isArray(part?.models) ? part.models : [])
-  ];
-  for (const value of values) {
-    const text = String(value || '').toUpperCase();
-    for (const match of text.matchAll(/\b(?:MS|FS|BR|SR)\s*-?\s*\d{2,4}\b/g)) {
-      const key = normalizeModelKey(match[0]);
-      if (key) keys.add(key);
-    }
-  }
-  return keys;
 }
 
 function flexiblePartScore(query, part) {

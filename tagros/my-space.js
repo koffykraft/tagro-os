@@ -27,9 +27,6 @@ const MySpace = {
     this.applyPreferences();
     this.bind();
     this.renderParked();
-    if (location.hash === '#settings') {
-      requestAnimationFrame(() => this.openPersonalization());
-    }
     await this.loadWork();
   },
 
@@ -46,15 +43,16 @@ const MySpace = {
 
   applyIdentity() {
     const name = String(this.session.name || 'Staff').trim();
+    const firstName = name.split(/\s+/)[0] || 'Staff';
     const initials = name.split(/\s+/).map(word => word[0]).join('').slice(0, 2).toUpperCase() || 'ST';
     const hour = new Date().getHours();
     const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
     const role = String(this.session.role || 'staff').toLowerCase();
     const roleName = role === 'owner' ? 'Owner' : role === 'manager' ? 'Manager' : 'Mechanic';
-    document.getElementById('compact-greeting').textContent = `${greeting},`;
-    document.getElementById('staff-name').textContent = name;
+    document.getElementById('compact-greeting').textContent = greeting;
+    document.getElementById('staff-name').textContent = firstName;
     document.getElementById('heading-greeting').textContent = greeting;
-    document.getElementById('heading-staff-name').textContent = name;
+    document.getElementById('heading-staff-name').textContent = firstName;
     document.getElementById('role-label').textContent = roleName;
     document.getElementById('profile-button').textContent = initials;
     document.getElementById('branch-label').textContent = this.session.branch || 'Branch';

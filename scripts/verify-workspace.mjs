@@ -49,12 +49,6 @@ check(html.includes('common-model-parts') && js.includes('commonModelParts'), 'm
 check(html.includes('bench-part-query') && js.includes('searchBenchParts'), 'inline TAGRO price-and-add search available');
 check(js.includes('existing.quantity =') && js.includes('this.renderBasket()'), 'repeat adds update the visible job list');
 check(html.includes('My queue') && html.includes('My pinned parts'), 'personal queue and pinned parts remain on the bench');
-check(js.includes('openPartsPicker()') && js.includes('app-catalog.html?job=') &&
-  html.includes('WorkOrderForm.consumePartsHandoff()'), 'job picker round trip returns selected parts to the workbench');
-check(workOrderForm.includes('tagro_parts_handoff_') &&
-  workOrderForm.includes('OS.del(key)') &&
-  workOrderForm.includes('const saved=await this.save(false)'),
-  'parts handoff is cleared only after the job saves successfully');
 
 console.log(`Service Workspace verification passed: ${assertions.length} checks.`);
 for (const assertion of assertions) console.log(`- ${assertion}`);

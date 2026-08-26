@@ -1,9 +1,8 @@
 import { readFile } from 'node:fs/promises';
 
-const [worker, jobs, bench, serviceUi] = await Promise.all([
+const [worker, jobs, serviceUi] = await Promise.all([
   readFile(new URL('../src/worker.js', import.meta.url), 'utf8'),
   readFile(new URL('../tagros/app-jobs.html', import.meta.url), 'utf8'),
-  readFile(new URL('../tagros/bench.html', import.meta.url), 'utf8'),
   readFile(new URL('../tagros/service-ui.js', import.meta.url), 'utf8')
 ]);
 
@@ -25,9 +24,7 @@ check(serviceUi.includes('this.machine(order)') &&
 check(serviceUi.includes('this.age(order.openedAt)') &&
   serviceUi.includes("order.assignedToName||'Unassigned'"), 'cards show age and assigned technician');
 check(serviceUi.includes('work.html?id=') && serviceUi.includes('encodeURIComponent(order.id)'), 'job tap opens the matching workbench');
-check(bench.includes("Api.request('/work-orders?mine=1&limit=200')") &&
-  bench.includes('No jobs assigned.') &&
-  bench.includes('data-active-app="bench"'), 'personal bench remains available');
+check(jobs.includes("params.set('mine','1')") && jobs.includes("textContent='My Bench'"), 'personal bench remains available');
 
 console.log(`Bench verification passed: ${checks.length} checks.`);
 for (const message of checks) console.log(`- ${message}`);
