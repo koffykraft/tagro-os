@@ -32,7 +32,7 @@ check(workspaceIds.every(id => htmlIds.has(id)), `workspace DOM contract (${work
 check(html.includes('work-space.css') && html.includes('work-space.js'), 'workspace assets linked');
 check(sw.includes("'/work-space.css'") && sw.includes("'/work-space.js'") && sw.includes('tagro-white-v26'), 'offline shell versioned');
 check(js.includes("Api.request('/work-orders?limit=160')") && js.includes("Api.request('/work-orders?mine=1&limit=160')"), 'live queue data used');
-check(js.includes('/knowledge/parts?query=') && js.includes('addCatalogPart'), 'parts:master-to-job path');
+check(js.includes('/catalog?type=part') && js.includes('addCatalogPart'), 'live catalogue-to-job path');
 check(js.includes('/estimate') && js.includes('Create estimate'), 'estimate conversion path');
 check(js.includes('/events') && js.includes('statusActions'), 'real workflow-event path');
 check(js.includes("'job_taken', 'Take this job'") && js.includes('data-record-observation') &&
@@ -43,8 +43,10 @@ check(!/Rubber Biju|Jose Sawmill|Thomas Thumpassery|94470000/i.test(`${html}\n${
 check(workOrderForm.includes("document.dispatchEvent(new CustomEvent('tagro:parts-updated'))"), 'basket receives part updates');
 check(workOrderForm.includes('data-part-hsn=') && workOrderForm.includes('data-part-gst='), 'catalog tax metadata preserved');
 check(workOrderForm.includes("draft:row.dataset.partDraft==='1'") && workOrderForm.includes('savedParts=this.parts.filter'), 'search drafts excluded from autosave');
+check(js.includes('loadModelParts') && html.includes('parts-assembly-carousel'), 'model-first assembly picker connected');
 check(html.includes('bench-glance-card') && js.includes('renderBenchFacts'), 'customer and machine facts visible on the bench');
-check(html.includes('bench-part-query') && js.includes('async searchParts()'), 'inline TAGRO price-and-add search available');
+check(html.includes('common-model-parts') && js.includes('commonModelParts'), 'model common-parts strip available');
+check(html.includes('bench-part-query') && js.includes('searchBenchParts'), 'inline TAGRO price-and-add search available');
 check(js.includes('existing.quantity =') && js.includes('this.renderBasket()'), 'repeat adds update the visible job list');
 check(html.includes('My queue') && html.includes('My pinned parts'), 'personal queue and pinned parts remain on the bench');
 check(js.includes('openPartsPicker()') && js.includes('app-catalog.html?job=') &&
