@@ -197,7 +197,7 @@ function showReceipt(invoice){
   document.getElementById('receipt-invoice-number').textContent=invoice.branch_code+' · '+new Date(invoice.created_at).toLocaleString('en-IN');
   document.getElementById('receipt-summary').innerHTML='<strong>'+OS.esc(invoice.party_name)+'</strong>'+(invoice.party_phone?'<span>'+OS.esc(invoice.party_phone)+'</span>':'');
   document.getElementById('receipt-lines').innerHTML=(invoice.lines||[]).map(line=>(
-    '<tr><td class="item-name-cell"><strong>'+OS.esc(line.item_name)+'</strong><span>'+OS.esc(line.part_number)+'</span></td><td>'+line.quantity+'</td><td class="money">'+money(line.unit_price)+'</td><td class="money">'+money(line.quantity*line.unit_price)+'</td></tr>'
+    '<tr><td class="item-name-cell"><strong>'+OS.esc(line.item_name)+'</strong><span>'+OS.esc(line.part_number)+'</span></td><td>'+line.quantity+'</td><td class="money">'+money(line.unit_rate_before_tax)+'</td><td class="money">'+money(line.taxable_amount)+'</td></tr>'
   )).join('');
   const taxLine=Number(invoice.igst_total)>0
     ?('<span>IGST</span><b>'+money(invoice.igst_total)+'</b>')
