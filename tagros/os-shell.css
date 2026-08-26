@@ -88,3 +88,58 @@ button,.secondary-button,.primary-button,.save-button,.link-button{min-height:44
   .app-topbar-title strong{font-size:18px}
   .app-topbar-title span{font-size:14px}
 }
+
+/* Sell (billing-mobile.html) -- counter billing, mobile-first. Cart and payment
+   action stay pinned in a fixed bottom bar (not buried at the end of a long
+   scroll -- see the Stock Count critique this was built to fix), and items are
+   added via a bottom sheet rather than a page navigation, so the cart is never
+   more than one tap away. */
+.sell-shell{padding-bottom:132px}
+.sell-party-panel,.sell-cart-panel{margin-bottom:14px}
+.sell-payment-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.sell-cart-lines{display:grid;gap:9px}
+.sell-cart-line{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:10px;padding:11px;border:1px solid var(--line);border-radius:14px;background:#fff}
+.sell-cart-line-main{min-width:0}
+.sell-cart-line-main strong{display:block;overflow:hidden;font-size:14px;text-overflow:ellipsis;white-space:nowrap}
+.sell-cart-line-main span{display:block;margin-top:3px;overflow:hidden;color:var(--muted);font-size:11px;text-overflow:ellipsis;white-space:nowrap}
+.sell-qty-stepper{display:flex;align-items:center;gap:6px}
+.sell-qty-btn{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--line);border-radius:10px;background:#faf9f7;color:var(--ink);font-size:18px;font-weight:900;cursor:pointer}
+.sell-qty-btn:hover{border-color:#e8b49a;background:var(--orange-soft)}
+.sell-qty-value{min-width:22px;text-align:center;font-weight:900;font-variant-numeric:tabular-nums}
+.sell-cart-line-total{min-width:70px;text-align:right;font-weight:900;font-variant-numeric:tabular-nums}
+.sell-remove-btn{display:grid;place-items:center;width:36px;height:36px;border:0;border-radius:10px;background:transparent;color:#a8a29e;font-size:20px;cursor:pointer}
+.sell-remove-btn:hover{background:#f5f5f4;color:#b91c1c}
+
+.sell-bottom-bar{position:fixed;right:0;bottom:0;left:0;z-index:60;display:flex;align-items:center;gap:12px;padding:12px clamp(15px,4vw,34px);padding-bottom:calc(12px + env(safe-area-inset-bottom));background:rgba(255,255,255,.98);border-top:1px solid var(--line);box-shadow:0 -8px 24px rgba(28,25,23,.08);backdrop-filter:blur(12px)}
+.sell-bottom-summary{display:flex;align-items:baseline;gap:6px;margin-right:auto;min-width:0}
+.sell-bottom-summary b{font-size:15px}
+.sell-bottom-summary span{color:var(--muted);font-size:12px}
+.sell-bottom-summary strong{margin-left:8px;font-size:18px;font-variant-numeric:tabular-nums}
+.sell-bottom-bar .secondary-button,.sell-bottom-bar .primary-button{min-height:48px;white-space:nowrap}
+
+.sell-item-sheet{width:min(96vw,620px)}
+.sell-item-results{display:grid;gap:8px;max-height:56vh;margin-top:12px;overflow:auto}
+.sell-item-result{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:56px;padding:10px 12px;border:1px solid var(--line);border-radius:13px;background:#fff;text-align:left;cursor:pointer}
+.sell-item-result:hover{border-color:#e8b49a;background:#fffaf7}
+.sell-item-result strong{display:block;font-size:14px}
+.sell-item-result small{display:block;margin-top:3px;color:var(--muted);font-size:11px}
+
+.sell-receipt-summary{display:flex;flex-direction:column;gap:2px;margin-bottom:14px}
+.sell-receipt-summary strong{font-size:18px}
+.sell-receipt-summary span{color:var(--muted);font-size:13px}
+.sell-receipt-totals{display:grid;grid-template-columns:1fr auto;gap:7px 0;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.sell-receipt-totals span{color:var(--muted);font-size:13px}
+.sell-receipt-totals b{text-align:right;font-variant-numeric:tabular-nums}
+.sell-receipt-totals .sell-grand-total{margin-top:6px;padding-top:8px;border-top:1px solid var(--line);color:var(--ink);font-size:17px;font-weight:950}
+
+@media(max-width:600px){
+  .sell-cart-line{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"main remove" "qty total";row-gap:8px}
+  .sell-cart-line-main{grid-area:main}
+  .sell-remove-btn{grid-area:remove}
+  .sell-qty-stepper{grid-area:qty}
+  .sell-cart-line-total{grid-area:total}
+  .sell-bottom-bar{flex-wrap:wrap}
+  .sell-bottom-summary{width:100%;margin-right:0}
+  .sell-bottom-bar .secondary-button{flex:1}
+  .sell-bottom-bar .primary-button{flex:1}
+}

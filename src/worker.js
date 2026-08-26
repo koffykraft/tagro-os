@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import { routeIntegratedTools } from './integrated-tools.js';
 import { runDailyBackup } from './backup.js';
+import { listMobileSales, getMobileSale, createMobileSale } from './mobile-sales.js';
 
 const SESSION_COOKIE = 'tagro_session';
 const SESSION_HOURS = 12;
@@ -266,6 +267,25 @@ async function routeApi(request, env, url) {
     const session = await getSession(request, env);
     if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
     return requestCatalogTagroName(request, env, session);
+  }
+
+  if (url.pathname === '/api/mobile-sales' && request.method === 'GET') {
+    const session = await getSession(request, env);
+    if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
+    return listMobileSales(env, session, url);
+  }
+
+  if (url.pathname === '/api/mobile-sales' && request.method === 'POST') {
+    const session = await getSession(request, env);
+    if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
+    return createMobileSale(request, env, session);
+  }
+
+  const mobileSaleMatch = url.pathname.match(/^\/api\/mobile-sales\/([^/]+)$/);
+  if (mobileSaleMatch && request.method === 'GET') {
+    const session = await getSession(request, env);
+    if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
+    return getMobileSale(env, session, decodeURIComponent(mobileSaleMatch[1]));
   }
 
   if (url.pathname === '/api/purchase-orders' && request.method === 'GET') {

@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Sell &middot; TAGRO</title>
+<link rel="stylesheet" href="os-shell.css">
+<link rel="stylesheet" href="os-design-system.css">
+</head>
+<body class="sell-page">
+<header class="topbar"><a class="brand" href="index.html"><img src="tagro-logo.png" alt="">TAGRO</a><div class="topbar-actions"><a class="secondary-button" href="manage.html">All modules</a><span class="profile-name" id="profile-name"></span></div></header>
+<main class="shell sell-shell">
+  <section class="page-heading"><div><p class="eyebrow">Counter billing</p><h1>Sell</h1><p>Add items, take payment, share the receipt.</p></div></section>
+
+  <div id="sale-form">
+    <section class="panel sell-party-panel">
+      <div class="panel-head"><h2>Customer</h2><span class="ds-muted">Optional for a cash sale</span></div>
+      <div class="panel-body">
+        <div class="form-grid">
+          <div class="field"><label for="party-name">Name</label><input class="control" id="party-name" maxlength="200" placeholder="Walk-in / cash sale"></div>
+          <div class="field"><label for="party-phone">Phone</label><input class="control" id="party-phone" type="tel" maxlength="20" placeholder="For the receipt on WhatsApp"></div>
+          <div class="field full"><label for="party-gstin">GSTIN</label><input class="control" id="party-gstin" maxlength="20" placeholder="Only if the customer needs a GST invoice"></div>
+        </div>
+        <div class="field">
+          <label>Payment mode</label>
+          <div class="sell-payment-chips" id="payment-chips">
+            <button class="ds-chip" type="button" data-mode="cash">Cash</button>
+            <button class="ds-chip" type="button" data-mode="upi">UPI</button>
+            <button class="ds-chip" type="button" data-mode="card">Card</button>
+            <button class="ds-chip" type="button" data-mode="bank">Bank</button>
+            <button class="ds-chip" type="button" data-mode="credit">Credit</button>
+            <button class="ds-chip" type="button" data-mode="mixed">Mixed</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel sell-cart-panel">
+      <div class="panel-head"><h2>Items</h2><span id="cart-count">0 items</span></div>
+      <div class="panel-body">
+        <div id="cart-lines" class="sell-cart-lines"></div>
+        <div class="empty-state compact" id="cart-empty"><div class="empty-state-icon">+</div><strong>No items yet</strong><p>Tap &ldquo;Add item&rdquo; below to search the catalog.</p></div>
+      </div>
+    </section>
+    <div class="inline-message" id="sale-message"></div>
+  </div>
+
+  <div id="receipt-view" class="hidden panel sell-receipt-panel">
+    <div class="panel-head"><h2>Sale complete</h2><span id="receipt-invoice-number"></span></div>
+    <div class="panel-body">
+      <div class="sell-receipt-summary" id="receipt-summary"></div>
+      <div class="data-table-wrap">
+        <table class="data-table"><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody id="receipt-lines"></tbody></table>
+      </div>
+      <div class="sell-receipt-totals" id="receipt-totals"></div>
+      <div class="communication-actions">
+        <a class="secondary-button orange outline-button hidden" id="receipt-whatsapp" target="_blank" rel="noopener">Share on WhatsApp</a>
+        <button class="primary-button" id="new-sale" type="button">New sale</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="sell-bottom-bar" id="bottom-bar">
+  <div class="sell-bottom-summary"><b id="bar-count">0</b><span>items</span><strong id="bar-total">&#8377;0</strong></div>
+  <button class="secondary-button orange" id="open-add-item" type="button">+ Add item</button>
+  <button class="primary-button" id="complete-sale" type="button" disabled>Complete sale</button>
+</div>
+
+<div class="modal-backdrop hidden" id="add-item-sheet">
+  <div class="modal-card sell-item-sheet">
+    <div class="modal-head"><h2>Add item</h2><button class="modal-close" id="close-add-item" type="button" aria-label="Close">&times;</button></div>
+    <div class="modal-body">
+      <input class="control" id="item-search" type="search" placeholder="Search part number, item name" autocomplete="off">
+      <div class="sell-item-results" id="item-results"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="os-manifest.js"></script><script src="os-core.js"></script><script src="app-shell.js"></script>
+<script>
+let session=null,cart=[],paymentMode='',clientRequestId=null,searchTimer=null,lastResults=[];
+window.addEventListener('DOMContentLoaded',boot);
+
+async function boot(){
+  session=await Session.restore();
+  if(!session){location.replace('login.html');return}
+  document.getElementById('profile-name').textContent=session.name+' · '+session.branchName;
+  Workspace.capture('billing');
+  resetSale();
+}
+
+function resetSale(){
+  cart=[];paymentMode='';clientRequestId=crypto.randomUUID();
+  document.getElementById('party-name').value='';
+  document.getElementById('party-phone').value='';
+  document.getElementById('party-gstin').value='';
+  document.getElementById('sale-message').textContent='';
+  document.querySelectorAll('#payment-chips .ds-chip').forEach(chip=>chip.classList.remove('selected'));
+  document.getElementById('sale-form').classList.remove('hidden');
+  document.getElementById('receipt-view').classList.add('hidden');
+  document.getElementById('bottom-bar').classList.remove('hidden');
+  renderCart();
+}
+
+function renderCart(){
+  const body=document.getElementById('cart-lines');
+  body.innerHTML=cart.map((line,index)=>(
+    '<div class="sell-cart-line">'+
+      '<div class="sell-cart-line-main"><strong>'+OS.esc(line.itemName)+'</strong><span>'+OS.esc(line.partNumber)+' · '+money(line.unitPrice)+' each</span></div>'+
+      '<div class="sell-qty-stepper">'+
+        '<button type="button" class="sell-qty-btn" data-dec="'+index+'" aria-label="Decrease">−</button>'+
+        '<span class="sell-qty-value">'+line.quantity+'</span>'+
+        '<button type="button" class="sell-qty-btn" data-inc="'+index+'" aria-label="Increase">+</button>'+
+      '</div>'+
+      '<div class="sell-cart-line-total">'+money(line.unitPrice*line.quantity)+'</div>'+
+      '<button type="button" class="sell-remove-btn" data-remove="'+index+'" aria-label="Remove">×</button>'+
+    '</div>'
+  )).join('');
+  document.getElementById('cart-empty').classList.toggle('hidden',cart.length>0);
+  body.querySelectorAll('[data-inc]').forEach(btn=>btn.addEventListener('click',()=>{cart[Number(btn.dataset.inc)].quantity++;renderCart()}));
+  body.querySelectorAll('[data-dec]').forEach(btn=>btn.addEventListener('click',()=>{const i=Number(btn.dataset.dec);cart[i].quantity--;if(cart[i].quantity<=0)cart.splice(i,1);renderCart()}));
+  body.querySelectorAll('[data-remove]').forEach(btn=>btn.addEventListener('click',()=>{cart.splice(Number(btn.dataset.remove),1);renderCart()}));
+  updateBottomBar();
+}
+
+function updateBottomBar(){
+  const count=cart.reduce((sum,line)=>sum+line.quantity,0);
+  const total=cart.reduce((sum,line)=>sum+line.unitPrice*line.quantity,0);
+  document.getElementById('cart-count').textContent=count+' item'+(count===1?'':'s');
+  document.getElementById('bar-count').textContent=count;
+  document.getElementById('bar-total').textContent=money(total);
+  document.getElementById('complete-sale').disabled=!(cart.length>0&&paymentMode);
+}
+
+function openSheet(){document.getElementById('add-item-sheet').classList.remove('hidden');document.getElementById('item-search').value='';document.getElementById('item-results').innerHTML='';document.getElementById('item-search').focus()}
+function closeSheet(){document.getElementById('add-item-sheet').classList.add('hidden')}
+
+async function searchItems(){
+  const query=document.getElementById('item-search').value.trim();
+  const box=document.getElementById('item-results');
+  if(query.length<2){box.innerHTML='<p class="ds-muted">Type at least 2 characters.</p>';return}
+  box.innerHTML='<p class="ds-muted">Searching&hellip;</p>';
+  try{
+    const data=await Api.request('/catalog?query='+encodeURIComponent(query)+'&limit=30');
+    const allResults=data.items||[];
+    lastResults=allResults.filter(item=>item.id&&!String(item.id).startsWith('official:'));
+    const skipped=allResults.length-lastResults.length;
+    box.innerHTML=lastResults.length?lastResults.map((item,index)=>(
+      '<button class="sell-item-result" type="button" data-index="'+index+'">'+
+        '<span><strong>'+OS.esc(item.item_name)+'</strong><small>'+OS.esc(item.part_number)+'</small></span>'+
+        '<span>'+money(item.retail_price)+'</span>'+
+      '</button>'
+    )).join(''):'<p class="ds-muted">No sellable items found.'+(skipped?' '+skipped+' catalog match'+(skipped===1?'':'es')+' need pricing set up in Parts before they can be sold.':'')+'</p>';
+    box.querySelectorAll('[data-index]').forEach(btn=>btn.addEventListener('click',()=>addItem(lastResults[Number(btn.dataset.index)])));
+  }catch(error){box.innerHTML='<p>'+OS.esc(error.message)+'</p>'}
+}
+
+function addItem(item){
+  if(!item||!item.id){Toast.show('That item cannot be sold from here yet.');return}
+  const existing=cart.find(line=>line.catalogItemId===item.id);
+  if(existing){existing.quantity++;}
+  else{cart.push({catalogItemId:item.id,partNumber:item.part_number,itemName:item.item_name,unitPrice:Number(item.retail_price)||0,quantity:1});}
+  renderCart();
+  closeSheet();
+  Toast.show(OS.esc(item.item_name)+' added');
+}
+
+async function completeSale(){
+  if(!(cart.length>0&&paymentMode))return;
+  const button=document.getElementById('complete-sale');
+  button.disabled=true;
+  document.getElementById('sale-message').textContent='Recording the sale…';
+  try{
+    const payload={
+      clientRequestId,
+      partyName:document.getElementById('party-name').value.trim(),
+      partyPhone:document.getElementById('party-phone').value.trim(),
+      partyGstin:document.getElementById('party-gstin').value.trim(),
+      paymentMode,
+      lines:cart.map(line=>({catalogItemId:line.catalogItemId,quantity:line.quantity}))
+    };
+    const data=await Api.request('/mobile-sales',{method:'POST',body:JSON.stringify(payload)});
+    showReceipt(data.invoice);
+  }catch(error){
+    document.getElementById('sale-message').textContent=error.message;
+    button.disabled=false;
+  }
+}
+
+function showReceipt(invoice){
+  document.getElementById('sale-form').classList.add('hidden');
+  document.getElementById('bottom-bar').classList.add('hidden');
+  document.getElementById('receipt-view').classList.remove('hidden');
+  document.getElementById('receipt-invoice-number').textContent=invoice.branch_code+' · '+new Date(invoice.created_at).toLocaleString('en-IN');
+  document.getElementById('receipt-summary').innerHTML='<strong>'+OS.esc(invoice.party_name)+'</strong>'+(invoice.party_phone?'<span>'+OS.esc(invoice.party_phone)+'</span>':'');
+  document.getElementById('receipt-lines').innerHTML=(invoice.lines||[]).map(line=>(
+    '<tr><td class="item-name-cell"><strong>'+OS.esc(line.item_name)+'</strong><span>'+OS.esc(line.part_number)+'</span></td><td>'+line.quantity+'</td><td class="money">'+money(line.unit_price)+'</td><td class="money">'+money(line.quantity*line.unit_price)+'</td></tr>'
+  )).join('');
+  const taxLine=Number(invoice.igst_total)>0
+    ?('<span>IGST</span><b>'+money(invoice.igst_total)+'</b>')
+    :('<span>CGST</span><b>'+money(invoice.cgst_total)+'</b><span>SGST</span><b>'+money(invoice.sgst_total)+'</b>');
+  document.getElementById('receipt-totals').innerHTML=
+    '<span>Taxable</span><b>'+money(invoice.taxable_total)+'</b>'+taxLine+
+    '<span>Round off</span><b>'+money(invoice.round_off)+'</b>'+
+    '<span class="sell-grand-total">Total</span><b class="sell-grand-total">'+money(invoice.grand_total)+'</b>'+
+    '<span>Payment</span><b>'+title(invoice.payment_mode)+'</b>';
+  const whatsapp=document.getElementById('receipt-whatsapp');
+  if(invoice.party_phone){
+    const text='TAGRO '+invoice.branch_name+' receipt — '+invoice.created_at.slice(0,10)+'\nTotal: '+money(invoice.grand_total)+' ('+title(invoice.payment_mode)+')\nThank you for your business.';
+    whatsapp.href='https://wa.me/'+encodeURIComponent(normalizePhone(invoice.party_phone))+'?text='+encodeURIComponent(text);
+    whatsapp.classList.remove('hidden');
+  }else{
+    whatsapp.classList.add('hidden');
+  }
+}
+
+function normalizePhone(value){const digits=String(value||'').replace(/\D/g,'');return digits.length===10?'91'+digits:digits}
+function money(value){return value===null||value===undefined||value===''?'—':'₹'+Number(value).toLocaleString('en-IN',{maximumFractionDigits:2})}
+function title(value){return String(value||'').replace(/^\w/,letter=>letter.toUpperCase())}
+
+document.getElementById('open-add-item').addEventListener('click',openSheet);
+document.getElementById('close-add-item').addEventListener('click',closeSheet);
+document.getElementById('add-item-sheet').addEventListener('click',event=>{if(event.target.id==='add-item-sheet')closeSheet()});
+document.getElementById('item-search').addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(searchItems,300)});
+document.getElementById('complete-sale').addEventListener('click',completeSale);
+document.getElementById('new-sale').addEventListener('click',resetSale);
+document.querySelectorAll('#payment-chips .ds-chip').forEach(chip=>chip.addEventListener('click',()=>{
+  document.querySelectorAll('#payment-chips .ds-chip').forEach(c=>c.classList.remove('selected'));
+  chip.classList.add('selected');
+  paymentMode=chip.dataset.mode;
+  updateBottomBar();
+}));
+</script>
+</body></html>

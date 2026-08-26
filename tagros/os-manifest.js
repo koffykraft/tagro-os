@@ -16,6 +16,7 @@ const TAGRO_MANIFEST = {
   ],
   apps: [
     { id:'home', label:'My Space', navIcon:'⌂', navigation:['desktop','mobile-core','mobile-receive'], description:'Personal workshop home', file:'index.html', enabled:true, ready:true, launcher:false, access:{roles:['all']} },
+    { id:'billing', label:'Sell', navIcon:'₹', navigation:['desktop','drawer','mobile-core'], icon:'billing', description:'Counter billing: add items, take payment, share the receipt', file:'billing-mobile.html', enabled:true, ready:true, access:{roles:['all']} },
     { id:'receive', label:'Receive', navIcon:'＋', navigation:['desktop','mobile-core','mobile-receive'], description:'Receive a machine for service', file:'receive.html', enabled:true, ready:true, launcher:false, access:{roles:['all']} },
     { id:'bench', label:'My Bench', navIcon:'⌑', navigation:['desktop','mobile-core','mobile-receive'], description:'Assigned workshop jobs', file:'bench.html', enabled:true, ready:true, launcher:false, access:{roles:['all']} },
     { id:'jobs', label:'Workbench', navIcon:'W', navigation:['desktop','drawer'], icon:'jobs', description:'Daily workshop queue and active machine work', file:'app-jobs.html', enabled:true, ready:true, access:{roles:['all']} },
