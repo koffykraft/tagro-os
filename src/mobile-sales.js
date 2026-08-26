@@ -271,6 +271,24 @@ async function resolvePartForSale(env, catalogItemId) {
     }
     return null;
   }
+  // 'service:<id>' lines are labour/service charges from service_job_types -- a
+  // separate table from catalog_items (Service Rates admin, not the parts catalog).
+  // Added for Repair Bill mode, where a bill can include a labour line alongside
+  // parts. Same resolved shape as a normal part: no partNumber (labour has none).
+  if (catalogItemId.indexOf('service:') === 0) {
+    const serviceId = cleanText(catalogItemId.slice('service:'.length), 100);
+    if (!serviceId) return null;
+    const serviceType = await env.DB.prepare(
+      'SELECT id, name, gst_rate, default_price FROM service_job_types WHERE id = ? AND active = 1'
+    ).bind(serviceId).first();
+    if (!serviceType) return null;
+    const unitPrice = Number(serviceType.default_price);
+    if (!Number.isFinite(unitPrice) || unitPrice <= 0) return null;
+    return {
+      source: 'service_job_types', partNumber: null, itemName: serviceType.name,
+      gstRate: Number(serviceType.gst_rate) || 0, unitPrice
+    };
+  }
   const item = await env.DB.prepare(
     'SELECT id, part_number, item_name, gst_rate, retail_price FROM catalog_items WHERE id = ? AND active = 1'
   ).bind(catalogItemId).first();

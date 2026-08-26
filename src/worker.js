@@ -221,6 +221,12 @@ async function routeApi(request, env, url) {
     return updateBranch(request, env, session, decodeURIComponent(branchMatch[1]));
   }
 
+  if (url.pathname === '/api/branches/mine' && request.method === 'GET') {
+    const session = await getSession(request, env);
+    if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
+    return getOwnBranchPaymentInfo(env, session);
+  }
+
   if (url.pathname === '/api/machine-catalog' && request.method === 'GET') {
     const session = await getSession(request, env);
     if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
@@ -2628,16 +2634,36 @@ async function listBranches(env, session) {
   let result;
   if (hasRole(session, 'owner')) {
     result = await env.DB.prepare(
-      `SELECT id, code, name, address_line_1, address_line_2, city, state, postal_code, phone, active, created_at, updated_at
+      `SELECT id, code, name, address_line_1, address_line_2, city, state, postal_code, phone,
+        upi_vpa, upi_payee_name, active, created_at, updated_at
        FROM branches ORDER BY active DESC, name`
     ).all();
   } else {
     result = await env.DB.prepare(
-      `SELECT id, code, name, address_line_1, address_line_2, city, state, postal_code, phone, active, created_at, updated_at
+      `SELECT id, code, name, address_line_1, address_line_2, city, state, postal_code, phone,
+        upi_vpa, upi_payee_name, active, created_at, updated_at
        FROM branches WHERE id = ?`
     ).bind(session.branch_id).all();
   }
   return json({ ok: true, branches: result.results || [] });
+}
+
+// Any authenticated staff member (not just manager/owner) can read their own branch's
+// UPI payment details -- the Sell page needs this to show a QR at checkout. Written
+// defensively: if the upi_vpa/upi_payee_name migration hasn't been applied yet, this
+// falls back to a query without those columns instead of 500ing the Sell page.
+async function getOwnBranchPaymentInfo(env, session) {
+  try {
+    const branch = await env.DB.prepare(
+      'SELECT name, upi_vpa, upi_payee_name FROM branches WHERE id = ?'
+    ).bind(session.branch_id).first();
+    return json({ ok: true, branch: branch || { name: null, upi_vpa: null, upi_payee_name: null } });
+  } catch (error) {
+    const message = String(error && error.message || error);
+    if (message.indexOf('no such column') === -1) throw error;
+    const branch = await env.DB.prepare('SELECT name FROM branches WHERE id = ?').bind(session.branch_id).first();
+    return json({ ok: true, branch: { name: branch ? branch.name : null, upi_vpa: null, upi_payee_name: null } });
+  }
 }
 
 async function createBranch(request, env) {
@@ -2652,11 +2678,13 @@ async function createBranch(request, env) {
   const branch = { id: makeId('branch'), ...input, active: 1, created_at: now, updated_at: now };
   await env.DB.prepare(
     `INSERT INTO branches
-      (id, code, name, address_line_1, address_line_2, city, state, postal_code, phone, active, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+      (id, code, name, address_line_1, address_line_2, city, state, postal_code, phone,
+       upi_vpa, upi_payee_name, active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
   ).bind(
     branch.id, branch.code, branch.name, branch.address_line_1, branch.address_line_2,
-    branch.city, branch.state, branch.postal_code, branch.phone, now, now
+    branch.city, branch.state, branch.postal_code, branch.phone,
+    branch.upi_vpa, branch.upi_payee_name, now, now
   ).run();
   return json({ ok: true, branch }, 201);
 }
@@ -2681,10 +2709,10 @@ async function updateBranch(request, env, session, id) {
   const updatedAt = new Date().toISOString();
   await env.DB.prepare(
     `UPDATE branches SET code = ?, name = ?, address_line_1 = ?, address_line_2 = ?,
-      city = ?, state = ?, postal_code = ?, phone = ?, updated_at = ? WHERE id = ?`
+      city = ?, state = ?, postal_code = ?, phone = ?, upi_vpa = ?, upi_payee_name = ?, updated_at = ? WHERE id = ?`
   ).bind(
     input.code, input.name, input.address_line_1, input.address_line_2, input.city,
-    input.state, input.postal_code, input.phone, updatedAt, branchId
+    input.state, input.postal_code, input.phone, input.upi_vpa, input.upi_payee_name, updatedAt, branchId
   ).run();
 
   const branch = await env.DB.prepare(
@@ -2703,7 +2731,9 @@ function branchInput(body) {
     city: cleanText(body.city, 100) || null,
     state: cleanText(body.state, 100) || null,
     postal_code: cleanText(body.postalCode, 12) || null,
-    phone: cleanPhone(body.phone)
+    phone: cleanPhone(body.phone),
+    upi_vpa: cleanText(body.upiVpa, 256) || null,
+    upi_payee_name: cleanText(body.upiPayeeName, 120) || null
   };
 }
 
@@ -2711,6 +2741,9 @@ function validateBranch(branch) {
   if (!branch.code || !/^[A-Z0-9_-]{2,12}$/.test(branch.code)) return 'Enter a 2–12 character branch code using letters or numbers.';
   if (!branch.name) return 'Branch name is required.';
   if (branch.phone && branch.phone.length < 10) return 'Enter a valid branch phone number or leave it blank.';
+  if (branch.upi_vpa && !/^[\w.-]{2,256}@[A-Za-z]{2,64}$/.test(branch.upi_vpa)) {
+    return 'Enter a valid UPI ID (e.g. name@bank) or leave it blank.';
+  }
   return null;
 }
 

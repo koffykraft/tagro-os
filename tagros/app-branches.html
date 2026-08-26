@@ -54,6 +54,8 @@
             <div class="field"><label for="branch-state">State</label><input class="control" id="branch-state" maxlength="100"></div>
             <div class="field"><label for="postal-code">Postal code</label><input class="control" id="postal-code" maxlength="12" inputmode="numeric"></div>
             <div class="field"><label for="branch-phone">Branch phone</label><input class="control" id="branch-phone" maxlength="20" type="tel" inputmode="tel"></div>
+            <div class="field"><label for="branch-upi-vpa">UPI ID (for QR at checkout)</label><input class="control" id="branch-upi-vpa" maxlength="256" placeholder="name@bank"></div>
+            <div class="field"><label for="branch-upi-payee">UPI payee name</label><input class="control" id="branch-upi-payee" maxlength="120" placeholder="Defaults to branch name"></div>
           </div>
           <div class="form-actions"><button class="secondary-button" id="cancel-button" type="button">Cancel</button><button class="primary-button save-button" id="save-button" type="submit">Save branch</button></div>
           <div class="inline-message" id="form-message" role="status" aria-live="polite"></div>
@@ -130,6 +132,7 @@ function showBranch(branch) {
     detailItem('State', branch.state),
     detailItem('Postal code', branch.postal_code),
     detailItem('Phone', branch.phone),
+    detailItem('UPI ID', branch.upi_vpa),
     detailItem('Status', branch.active ? 'Active' : 'Inactive')
   ].join('');
   document.querySelectorAll('.customer-row').forEach(row => row.classList.toggle('selected', row.querySelector('.customer-code')?.textContent === branch.code));
@@ -154,6 +157,8 @@ function openForm(branch = null) {
   document.getElementById('branch-state').value = branch?.state || '';
   document.getElementById('postal-code').value = branch?.postal_code || '';
   document.getElementById('branch-phone').value = branch?.phone || '';
+  document.getElementById('branch-upi-vpa').value = branch?.upi_vpa || '';
+  document.getElementById('branch-upi-payee').value = branch?.upi_payee_name || '';
   document.getElementById('save-button').textContent = branch ? 'Save changes' : 'Save branch';
   formMessage.textContent = '';
   document.getElementById('branch-code').focus();
@@ -176,7 +181,9 @@ form.addEventListener('submit', async event => {
     city: document.getElementById('branch-city').value,
     state: document.getElementById('branch-state').value,
     postalCode: document.getElementById('postal-code').value,
-    phone: document.getElementById('branch-phone').value
+    phone: document.getElementById('branch-phone').value,
+    upiVpa: document.getElementById('branch-upi-vpa').value,
+    upiPayeeName: document.getElementById('branch-upi-payee').value
   };
   const saveButton = document.getElementById('save-button');
   saveButton.disabled = true;

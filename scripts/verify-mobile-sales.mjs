@@ -121,6 +121,17 @@ function seedFixtures(DB) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'manual', 0, 1, ?, ?)`
     ).bind(id, pn, name, type, hsn, gst, retail, mrp, now, now).run();
   }
+
+  // service_job_types rows for Repair Bill mode's 'service:<id>' labour lines
+  // (added alongside catalog_items, not part of it -- see resolvePartForSale).
+  DB.prepare(
+    `INSERT INTO service_job_types (id, name, description, standard_minutes, default_price, hsn_sac, gst_rate, active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+  ).bind('svc_chain_sharpen', 'Chain sharpening', 'Standard chain sharpening service', 20, 150, '998719', 18, now, now).run();
+  DB.prepare(
+    `INSERT INTO service_job_types (id, name, description, standard_minutes, default_price, hsn_sac, gst_rate, active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+  ).bind('svc_no_price', 'Undiagnosed labour', 'Rate not yet set', null, null, '998719', 18, now, now).run();
 }
 
 function fakeEnv(DB) {
@@ -328,6 +339,27 @@ async function run() {
     check('official item tagged tagro_parts_master', body.ok && body.invoice.lines[0].source === 'tagro_parts_master', body.ok && body.invoice.lines[0].source);
     check('official item price from master list (55)', body.ok && body.invoice.lines[0].unit_rate_before_tax === 55, body.ok && body.invoice.lines[0].unit_rate_before_tax);
   }
+
+  // 14b. Repair Bill mode: a 'service:<id>' line resolves against service_job_types
+  // (not catalog_items) and sells at its default_price -- this is the extension added
+  // for labour/service charges alongside parts.
+  {
+    const res = await mobileSales.createMobileSale(req(baseSale({ lines: [{ catalogItemId: 'service:svc_chain_sharpen', quantity: 1 }] })), env, sessionA);
+    const body = await jsonOf(res);
+    check('service line sells ok', body.ok === true, JSON.stringify(body));
+    check('service line tagged service_job_types', body.ok && body.invoice.lines[0].source === 'service_job_types', body.ok && body.invoice.lines[0].source);
+    check('service line price from default_price (150)', body.ok && body.invoice.lines[0].unit_rate_before_tax === 150, body.ok && body.invoice.lines[0].unit_rate_before_tax);
+    check('service line has no part number', body.ok && (body.invoice.lines[0].part_number === null || body.invoice.lines[0].part_number === undefined), body.ok && body.invoice.lines[0].part_number);
+  }
+
+  // 14c. A service_job_types row with no default_price set (not yet priced by a
+  // manager) is rejected the same way a null/zero-priced catalog item is.
+  await expectThrowOrError('service line with null default_price is rejected', () =>
+    mobileSales.createMobileSale(req(baseSale({ lines: [{ catalogItemId: 'service:svc_no_price', quantity: 1 }] })), env, sessionA));
+
+  // 14d. Unknown service id is rejected same as an unknown catalog item id.
+  await expectThrowOrError('unknown service id is rejected', () =>
+    mobileSales.createMobileSale(req(baseSale({ lines: [{ catalogItemId: 'service:does_not_exist', quantity: 1 }] })), env, sessionA));
 
   // 15. Documented current behavior: same idempotency key, DIFFERENT payload -> still
   // returns the original invoice (no payload-hash comparison implemented yet). This is
