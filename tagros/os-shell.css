@@ -143,3 +143,4 @@ button,.secondary-button,.primary-button,.save-button,.link-button{min-height:44
   .sell-bottom-bar .secondary-button{flex:1}
   .sell-bottom-bar .primary-button{flex:1}
 }
+.sell-sync-status{display:inline-block;margin-bottom:12px;padding:6px 10px;border-radius:10px;font-size:11px;font-weight:800}.sell-sync-status.pending{background:#fff3cd;color:#805b10}.sell-sync-status.synced{background:#eaf6ed;color:var(--green)}.sell-sync-status.failed{background:#fdecea;color:#b91c1c}

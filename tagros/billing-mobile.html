@@ -49,6 +49,7 @@
   <div id="receipt-view" class="hidden panel sell-receipt-panel">
     <div class="panel-head"><h2>Sale complete</h2><span id="receipt-invoice-number"></span></div>
     <div class="panel-body">
+      <div class="sell-sync-status" id="receipt-sync-status"></div>
       <div class="sell-receipt-summary" id="receipt-summary"></div>
       <div class="data-table-wrap">
         <table class="data-table"><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody id="receipt-lines"></tbody></table>
@@ -195,6 +196,17 @@ function showReceipt(invoice){
   document.getElementById('bottom-bar').classList.add('hidden');
   document.getElementById('receipt-view').classList.remove('hidden');
   document.getElementById('receipt-invoice-number').textContent=invoice.branch_code+' · '+new Date(invoice.created_at).toLocaleString('en-IN');
+  const syncEl=document.getElementById('receipt-sync-status');
+  if(invoice.status==='written'&&invoice.busy_voucher_number){
+    syncEl.textContent='Invoice #'+invoice.busy_voucher_number;
+    syncEl.className='sell-sync-status synced';
+  }else if(invoice.status==='failed'){
+    syncEl.textContent='Sync failed — accounting team notified, sale is saved';
+    syncEl.className='sell-sync-status failed';
+  }else{
+    syncEl.textContent='Provisional receipt — accounting sync pending, not yet a numbered tax invoice';
+    syncEl.className='sell-sync-status pending';
+  }
   document.getElementById('receipt-summary').innerHTML='<strong>'+OS.esc(invoice.party_name)+'</strong>'+(invoice.party_phone?'<span>'+OS.esc(invoice.party_phone)+'</span>':'');
   document.getElementById('receipt-lines').innerHTML=(invoice.lines||[]).map(line=>(
     '<tr><td class="item-name-cell"><strong>'+OS.esc(line.item_name)+'</strong><span>'+OS.esc(line.part_number)+'</span></td><td>'+line.quantity+'</td><td class="money">'+money(line.unit_rate_before_tax)+'</td><td class="money">'+money(line.taxable_amount)+'</td></tr>'

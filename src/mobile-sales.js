@@ -21,6 +21,18 @@
 
 const PAYMENT_MODES = new Set(['cash', 'upi', 'card', 'bank', 'credit', 'mixed']);
 const KERALA_GST_STATE_CODE = '32';
+// Standard 15-char GSTIN: 2-digit state code, 10-char PAN (5 letters, 4 digits, 1
+// letter), 1-char entity number, literal 'Z', 1-char checksum. This checks shape
+// only, not the actual checksum digit (verifying that requires the full GSTIN
+// checksum algorithm, not just a regex) -- good enough to reject typos and garbage
+// without needing a real GST-registry lookup.
+const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+const VALID_GST_STATE_CODES = new Set([
+  '01', '02', '03', '04', '05', '06', '07', '08', '09', '10',
+  '11', '12', '13', '14', '15', '16', '17', '18', '19', '20',
+  '21', '22', '23', '24', '25', '26', '27', '28', '29', '30',
+  '31', '32', '33', '34', '35', '36', '37', '38', '97'
+]);
 
 export async function listMobileSales(env, session, url) {
   const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 200);
@@ -89,7 +101,11 @@ export async function createMobileSale(request, env, session) {
 
   const partyName = cleanText(body.partyName, 200) || 'Cash sale';
   const partyPhone = cleanText(body.partyPhone, 20);
-  const partyGstin = cleanText(body.partyGstin, 20).toUpperCase();
+  const partyGstinRaw = cleanText(body.partyGstin, 20).toUpperCase();
+  if (partyGstinRaw && (!GSTIN_PATTERN.test(partyGstinRaw) || !VALID_GST_STATE_CODES.has(partyGstinRaw.slice(0, 2)))) {
+    return json({ ok: false, error: 'GSTIN format looks invalid -- double-check it or leave it blank.' }, 400);
+  }
+  const partyGstin = partyGstinRaw;
   const narration = cleanText(body.narration, 500);
   const suppliedDate = cleanText(body.businessDate, 10);
   const businessDate = /^\d{4}-\d{2}-\d{2}$/.test(suppliedDate) ? suppliedDate : new Date().toISOString().slice(0, 10);
@@ -181,6 +197,10 @@ export async function createMobileSale(request, env, session) {
         'SELECT id FROM mobile_sales_invoices WHERE client_request_id = ? AND branch_id = ?'
       ).bind(clientRequestId, branch.id).first();
       if (raced) return json({ ok: true, invoice: await loadInvoice(env, raced.id), duplicate: true });
+      // client_request_id is globally unique in the schema (not scoped per branch), so a
+      // collision that isn't this branch's own race belongs to a different branch. Never
+      // load or leak that invoice -- return a clean conflict instead of an unhandled 500.
+      return json({ ok: false, error: 'This request id was already used for another sale. Retry with a new id.' }, 409);
     }
     throw error;
   }

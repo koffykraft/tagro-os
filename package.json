@@ -19,6 +19,7 @@
     "verify:integrated-tools": "node scripts/verify-integrated-tools.mjs",
     "verify:customer-import": "node scripts/verify-customer-import.mjs",
     "verify:machine-import": "node scripts/verify-machine-import.mjs",
+    "verify:mobile-sales": "node scripts/verify-mobile-sales.mjs",
     "deploy": "wrangler deploy --env=\"\" --strict",
     "deploy:staging": "wrangler deploy --env staging --strict",
     "deploy:dry-run": "wrangler deploy --env=\"\" --dry-run --strict",
