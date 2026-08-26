@@ -94,6 +94,9 @@ async function routeApi(request, env, url) {
   if (url.pathname === '/api/admin/import-machines' && request.method === 'POST') {
     return importMachinesAdmin(request, env);
   }
+  if (url.pathname === '/api/admin/import-parts-master' && request.method === 'POST') {
+    return importPartsFromMasterAdmin(request, env);
+  }
 
   if (request.method === 'POST' && url.pathname === '/api/auth/login') {
     return login(request, env);
@@ -2844,7 +2847,7 @@ async function listCatalogItems(env, url) {
       item_type: itemType,
       hsn_sac: hsnSac,
       gst_rate: optionalNumber(part?.gst) ?? 0,
-      retail_price: optionalNumber(part?.price),
+      retail_price: optionalNumber(part?.retail ?? part?.price),
       mrp: optionalNumber(part?.mrp),
       details_json: JSON.stringify({
         source: cleanText(part?.source, 120) || 'Official STIHL price list',
@@ -2885,6 +2888,80 @@ function catalogTypeFromGroup(group) {
   if (value === 'machines' || value === 'machine') return 'machine';
   if (value === 'accessories' || value === 'accessory') return 'accessory';
   return 'part';
+}
+
+const PARTS_MASTER_IMPORT_BATCH_STATEMENTS = 40;
+
+async function importPartsFromMasterAdmin(request, env) {
+  const authResponse = authorizeOwnerImport(request, env, 'Parts master import');
+  if (authResponse) return authResponse;
+
+  if (!env.TAGRO_DATA) return json({ ok: false, error: 'TAGRO parts are not connected.' }, 503);
+  const master = await env.TAGRO_DATA.get('parts:master', { type: 'json' });
+  if (!Array.isArray(master)) {
+    return json({ ok: false, error: 'TAGRO parts list is unavailable.' }, 503);
+  }
+
+  const existingResult = await env.DB.prepare('SELECT part_number FROM catalog_items').all();
+  const existingPartNumbers = new Set(
+    (existingResult.results || []).map(row => normalizePartNumber(row.part_number))
+  );
+
+  const now = new Date().toISOString();
+  const statements = [];
+  const skipped = { noPrice: 0, invalid: 0, duplicate: 0 };
+  let inserted = 0;
+
+  for (const part of master) {
+    const partNumber = cleanText(part && (part.no || part.id), 100).toUpperCase();
+    const tagroName = cleanText(part && (part.tagroName || part.name), 240);
+    const stihlName = cleanText(part && part.stihlName, 240);
+    const itemName = tagroName || stihlName;
+    const hsnSac = cleanText(part && part.hsn, 30).toUpperCase();
+    if (!partNumber || !itemName || !hsnSac) {
+      skipped.invalid += 1;
+      continue;
+    }
+    const normalized = normalizePartNumber(partNumber);
+    if (existingPartNumbers.has(normalized)) {
+      skipped.duplicate += 1;
+      continue;
+    }
+    const retailPrice = optionalNumber(part && (part.retail != null ? part.retail : part.price));
+    if (!retailPrice || retailPrice <= 0) {
+      skipped.noPrice += 1;
+      continue;
+    }
+    const mrp = optionalNumber(part && part.mrp);
+    const gstRate = optionalNumber(part && part.gst) || 0;
+    const itemType = catalogTypeFromGroup(part && part.group);
+    const detailsJson = JSON.stringify({
+      source: cleanText(part && part.source, 120) || 'Official STIHL price list',
+      effectiveDate: cleanText(part && part.effectiveDate, 20) || null
+    });
+    existingPartNumbers.add(normalized);
+    inserted += 1;
+    statements.push(env.DB.prepare(
+      `INSERT INTO catalog_items
+        (id, part_number, item_name, item_type, hsn_sac, gst_rate, retail_price, mrp,
+         details_json, data_source, review_required, active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'imported', 1, 1, ?, ?)`
+    ).bind(
+      makeId('item'), partNumber, itemName, itemType, hsnSac, gstRate, retailPrice, mrp,
+      detailsJson, now, now
+    ));
+  }
+
+  for (let offset = 0; offset < statements.length; offset += PARTS_MASTER_IMPORT_BATCH_STATEMENTS) {
+    await env.DB.batch(statements.slice(offset, offset + PARTS_MASTER_IMPORT_BATCH_STATEMENTS));
+  }
+
+  return json({
+    ok: true,
+    totalInMaster: master.length,
+    inserted,
+    skipped
+  });
 }
 
 async function createCatalogItem(request, env, session) {

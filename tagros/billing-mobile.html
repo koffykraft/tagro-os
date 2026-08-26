@@ -146,7 +146,7 @@ async function searchItems(){
   try{
     const data=await Api.request('/catalog?query='+encodeURIComponent(query)+'&limit=30');
     const allResults=data.items||[];
-    lastResults=allResults.filter(item=>item.id&&!String(item.id).startsWith('official:'));
+    lastResults=allResults.filter(item=>item.id&&Number(item.retail_price)>0);
     const skipped=allResults.length-lastResults.length;
     box.innerHTML=lastResults.length?lastResults.map((item,index)=>(
       '<button class="sell-item-result" type="button" data-index="'+index+'">'+
