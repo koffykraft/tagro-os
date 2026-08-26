@@ -35,6 +35,16 @@ binding = "MANUALS"
 bucket_name = "tagro-manuals"
 remote = true
 
+[[r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "tagro-os-backups"
+remote = true
+
+# Daily full backup of every business table to R2 (see src/backup.js).
+# 20:00 UTC = 01:30 IST -- after business hours for all branches.
+[triggers]
+crons = ["0 20 * * *"]
+
 [observability]
 enabled = true
 

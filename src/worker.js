@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import { routeIntegratedTools } from './integrated-tools.js';
+import { runDailyBackup } from './backup.js';
 
 const SESSION_COOKIE = 'tagro_session';
 const SESSION_HOURS = 12;
@@ -42,6 +43,14 @@ export default {
         error: 'Unable to complete the request.'
       }, 500);
     }
+  },
+
+  // Cron Trigger (see [triggers] in wrangler.toml) -- daily full backup of
+  // every business table to R2. waitUntil keeps the invocation alive until
+  // the backup finishes writing, since scheduled() itself has no response
+  // to return.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runDailyBackup(env));
   }
 };
 
