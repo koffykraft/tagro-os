@@ -133,6 +133,7 @@ function legacyRenderItems() {
 
 let destinationOrders = [];
 let activeAssembly = '';
+let globalDiagramImages = [];
 
 async function boot() {
   session = await Session.restore();
@@ -201,7 +202,11 @@ async function loadItems() {
   const model = document.getElementById('global-model').value;
   try {
     if (model) {
-      const data = await Api.request('/knowledge/parts?model=' + encodeURIComponent(model) + '&query=' + encodeURIComponent(query) + '&limit=500');
+      const [data, assetData] = await Promise.all([
+        Api.request('/knowledge/parts?model=' + encodeURIComponent(model) + '&query=' + encodeURIComponent(query) + '&limit=500'),
+        Api.request('/knowledge/assets?model=' + encodeURIComponent(model)).catch(() => ({ assets: [] }))
+      ]);
+      globalDiagramImages = (assetData.assets || []).filter(asset => asset.type === 'image');
       items = (data.parts || []).map(part => ({
         id: 'knowledge:' + (part.currentPartNumber || part.partNumber),
         part_number: part.currentPartNumber || part.partNumber || '',
@@ -222,6 +227,7 @@ async function loadItems() {
       if (activeAssembly && !query) items = items.filter(item => item.section === activeAssembly);
       document.getElementById('catalog-count').textContent = items.length + ' parts for ' + model.replace(/^([A-Z]+)(\d)/, '$1 $2');
     } else {
+      globalDiagramImages = [];
       document.getElementById('global-assembly-carousel').innerHTML = '';
       const data = await Api.request('/catalog?limit=150&type=part&query=' + encodeURIComponent(query));
       items = data.items || [];
@@ -239,7 +245,17 @@ async function loadItems() {
 function renderAssemblies() {
   const carousel = document.getElementById('global-assembly-carousel');
   const sections = [...new Set(items.map(item => item.section).filter(Boolean))];
-  if (!sections.length) { activeAssembly = ''; carousel.innerHTML = '<span class="catalog-count">No uploaded assemblies for this model yet.</span>'; return; }
+  if (!sections.length) {
+    activeAssembly = '';
+    if (globalDiagramImages.length) {
+      carousel.innerHTML = globalDiagramImages.map(image =>
+        '<a class="assembly-diagram-thumb" href="' + OS.esc(image.url) + '" target="_blank" rel="noopener" title="' + OS.esc(image.name) + '"><img src="' + OS.esc(image.url) + '" alt="' + OS.esc(image.name) + '" loading="lazy"></a>'
+      ).join('');
+    } else {
+      carousel.innerHTML = '<span class="catalog-count">No uploaded assemblies for this model yet.</span>';
+    }
+    return;
+  }
   if (!sections.includes(activeAssembly)) activeAssembly = sections[0];
   carousel.innerHTML = sections.map(section =>
     '<button type="button" class="' + (section === activeAssembly ? 'active' : '') + '" data-global-section="' + OS.esc(section) + '">' + OS.esc(section) + '</button>'

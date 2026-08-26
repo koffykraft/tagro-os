@@ -14,6 +14,7 @@ const JobWorkspace = {
   modelParts: [],
   loadedModelKey: '',
   diagramAsset: null,
+  diagramImages: [],
   modelChoicesLoaded: false,
   activeSection: '',
   partsMode: 'fast',
@@ -633,11 +634,12 @@ const JobWorkspace = {
     }
     if (this.loadedModelKey === this.modelKey && this.modelParts.length) return;
     const [data, assetData] = await Promise.all([
-      Api.request(`/knowledge/parts?model=${encodeURIComponent(this.modelKey)}&limit=500`),
+      Api.request(`/knowledge/parts?model=${encodeURIComponent(this.modelKey)}&limit=500`).catch(() => ({ parts: [] })),
       Api.request(`/knowledge/assets?model=${encodeURIComponent(this.modelKey)}`).catch(() => ({ assets: [] }))
     ]);
     this.modelParts = (data.parts || []).map(part => this.catalogItem(part));
     this.diagramAsset = (assetData.assets || []).find(asset => asset.type === 'pdf' || /parts|catalog/i.test(asset.name || '')) || null;
+    this.diagramImages = (assetData.assets || []).filter(asset => asset.type === 'image');
     this.loadedModelKey = this.modelKey;
   },
 
@@ -742,15 +744,23 @@ const JobWorkspace = {
       if (diagramAsset) diagramLink.href = diagramAsset.url;
       const sections = [...new Set(this.modelParts.map(part => part.section).filter(Boolean))];
       this.activeSection = sections[0] || '';
-      carousel.innerHTML = sections.length ? sections.map((section, index) =>
-        `<button type="button" class="${index === 0 ? 'active' : ''}" data-section="${ServiceUI.esc(section)}">${ServiceUI.esc(section)}</button>`
-      ).join('') : '<span class="assembly-empty">No uploaded assembly map yet—search remains available.</span>';
-      carousel.querySelectorAll('[data-section]').forEach(button => button.addEventListener('click', () => {
-        this.partsMode = 'visual';
-        this.activeSection = button.dataset.section;
-        carousel.querySelectorAll('button').forEach(item => item.classList.toggle('active', item === button));
-        this.renderPartResults(this.modelParts.filter(part => part.section === this.activeSection));
-      }));
+      if (sections.length) {
+        carousel.innerHTML = sections.map((section, index) =>
+          `<button type="button" class="${index === 0 ? 'active' : ''}" data-section="${ServiceUI.esc(section)}">${ServiceUI.esc(section)}</button>`
+        ).join('');
+        carousel.querySelectorAll('[data-section]').forEach(button => button.addEventListener('click', () => {
+          this.partsMode = 'visual';
+          this.activeSection = button.dataset.section;
+          carousel.querySelectorAll('button').forEach(item => item.classList.toggle('active', item === button));
+          this.renderPartResults(this.modelParts.filter(part => part.section === this.activeSection));
+        }));
+      } else if ((this.diagramImages || []).length) {
+        carousel.innerHTML = this.diagramImages.map(image =>
+          `<a class="assembly-diagram-thumb" href="${ServiceUI.esc(image.url)}" target="_blank" rel="noopener" title="${ServiceUI.esc(image.name)}"><img src="${ServiceUI.esc(image.url)}" alt="${ServiceUI.esc(image.name)}" loading="lazy"></a>`
+        ).join('');
+      } else {
+        carousel.innerHTML = '<span class="assembly-empty">No uploaded assembly map yet—search remains available.</span>';
+      }
       this.setPartsMode('fast');
     } catch (error) {
       carousel.innerHTML = '';

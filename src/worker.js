@@ -5799,15 +5799,36 @@ function suggestFamiliarPartName(value) {
 }
 
 async function listKnowledgeModels(env) {
+  if (!env.MANUALS) {
+    return json({
+      ok: true,
+      models: [],
+      parked: true,
+      sources: { structuredModels: 0, pricedModels: 0, masterPriceList: Boolean(env.TAGRO_DATA), manuals: false }
+    });
+  }
+  const prefixes = new Set();
+  let cursor;
+  do {
+    const listed = await env.MANUALS.list({ prefix: 'stihl/', delimiter: '/', limit: 1000, cursor });
+    for (const entry of listed.delimitedPrefixes || []) prefixes.add(entry);
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+  const models = [...prefixes]
+    .map(prefix => prefix.replace(/^stihl\//, '').replace(/\/$/, ''))
+    .filter(Boolean)
+    .map(raw => normalizeModelKey(raw.replace(/repairmanual2025$|repairmanual$/i, '')))
+    .filter(Boolean);
+  const unique = [...new Set(models)].sort();
   return json({
     ok: true,
-    models: [],
-    parked: true,
+    models: unique.map(key => ({ key, label: formatModelKey(key), hasParts: true, hasDiagrams: true })),
+    parked: false,
     sources: {
-      structuredModels: 0,
+      structuredModels: unique.length,
       pricedModels: 0,
       masterPriceList: Boolean(env.TAGRO_DATA),
-      manuals: Boolean(env.MANUALS)
+      manuals: true
     }
   });
 }
