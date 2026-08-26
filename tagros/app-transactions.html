@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Transactions — TAGRO OS</title>
+<link rel="stylesheet" href="os-shell.css">
+<script src="os-manifest.js"></script>
+<script src="os-core.js"></script>
+<script src="app-shell.js"></script>
+<style>
+.txn{max-width:1240px;margin:auto;padding:20px}
+.txn-tabs{display:flex;gap:8px;margin:14px 0;flex-wrap:wrap}
+.txn-tab{padding:9px 16px;border:1px solid #ccc;border-radius:999px;background:#fff;font-weight:800;font-size:13px;cursor:pointer;color:#333}
+.txn-tab.active{background:#111;color:#fff;border-color:#111}
+.filters{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:10px}
+.field{display:grid;gap:6px;min-width:0}
+.field>span{color:#666;font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.filters input,.filters select{width:100%;min-height:42px;padding:10px;border:1px solid #ccc;border-radius:10px;background:#fff;font:inherit}
+.summary-bar{display:flex;gap:22px;align-items:center;flex-wrap:wrap;padding:11px 16px;border:1px solid #ddd;border-radius:12px;margin:14px 0;font-size:11px;color:#666;letter-spacing:.04em;text-transform:uppercase}
+.summary-bar b{display:block;color:#111;font-size:15px;letter-spacing:0;text-transform:none;margin-top:2px;font-weight:800}
+.table{overflow:auto;border:1px solid #ddd;border-radius:14px}
+table{border-collapse:collapse;width:100%;min-width:820px;table-layout:fixed}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #eee;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;height:34px}
+th{color:#666;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;background:#fafafa;position:sticky;top:0}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:#f7f7f8}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:.02em}
+.pill-written,.pill-approved,.pill-exported{background:#eaf6ed;color:var(--green,#1c7a34)}
+.pill-queued,.pill-processing,.pill-draft,.pill-ready{background:#fff3cd;color:#805b10}
+.pill-failed,.pill-rejected,.pill-cancelled{background:#fdecea;color:#b91c1c}
+.pill-sent{background:#e8f0fe;color:#1a56c4}
+.detail{margin-top:16px;border:1px solid #ddd;border-radius:14px;padding:16px}
+.detail table{min-width:0}
+.hidden{display:none}
+.empty-row td{white-space:normal;color:#888;text-align:center;padding:22px 10px}
+@media(max-width:760px){.filters{grid-template-columns:1fr 1fr}.field-search{grid-column:1/-1}.txn{padding:14px}.summary-bar{gap:14px}}
+</style>
+</head>
+<body>
+<header class="app-topbar"><a class="back-button" href="index.html">‹</a><div class="app-topbar-title"><strong>Transactions</strong><span id="scope">Sales, purchases and estimates</span></div><a class="brand-logo" href="index.html"><img src="tagro-logo.png" alt="TAGRO"></a></header>
+<main class="txn">
+<section class="page-heading"><div><p class="eyebrow">Recorded transactions</p><h1>Sales, purchases and estimates.</h1></div></section>
+
+<div class="txn-tabs" id="tabs">
+  <button class="txn-tab active" data-kind="sales" type="button">Sales</button>
+  <button class="txn-tab" data-kind="purchases" type="button">Purchases</button>
+  <button class="txn-tab" data-kind="estimates" type="button">Estimates</button>
+</div>
+
+<div class="filters">
+  <label class="field hidden" id="field-branch"><span>Branch</span><select id="branch"></select></label>
+  <label class="field" id="field-status"><span>Status</span><select id="status"><option value="">All</option></select></label>
+  <label class="field"><span>From date</span><input id="from" type="date"></label>
+  <label class="field"><span>To date</span><input id="to" type="date"></label>
+  <label class="field field-search"><span>Find</span><input id="q" placeholder="Name, number or customer"></label>
+</div>
+
+<div class="summary-bar" id="summary"></div>
+<div class="table"><table><thead id="thead"></thead><tbody id="rows"></tbody></table></div>
+<section class="detail hidden" id="detail"></section>
+</main>
+<div class="toast" id="toast"></div>
+<script>
+let session,kind='sales',branches=[],rowsData=[];
+const $=id=>document.getElementById(id);
+const money=v=>Number(v||0).toLocaleString('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0});
+const esc=v=>OS.esc(String(v??''));
+const title=v=>String(v||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+const dateFmt=v=>{if(!v)return'—';const d=new Date(v);return isNaN(d)?String(v).slice(0,10):d.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'})};
+
+const KINDS={
+  sales:{
+    label:'Sales',
+    statuses:[['queued','Queued'],['processing','Processing'],['written','Written'],['failed','Failed'],['cancelled','Cancelled']],
+    columns:[
+      {h:'Date',w:70},{h:'Branch',w:60},{h:'Customer',w:160},{h:'Payment',w:70},
+      {h:'Lines',w:50,num:true},{h:'Status',w:90},{h:'Voucher #',w:90},
+      {h:'Before GST',w:90,num:true},{h:'Including GST',w:100,num:true}
+    ],
+    row:r=>[dateFmt(r.business_date),esc(r.branch_code),esc(r.party_name||'—'),title(r.payment_mode),
+      Number(r.line_count||0),pill(r.status,title(r.status)),esc(r.busy_voucher_number||'—'),
+      money(r.taxable_total),money(r.grand_total)],
+    summary:rows=>{
+      const total=rows.reduce((s,r)=>s+Number(r.grand_total||0),0);
+      const before=rows.reduce((s,r)=>s+Number(r.taxable_total||0),0);
+      const written=rows.filter(r=>r.status==='written').length;
+      return [['Invoices',rows.length],['Before GST',money(before)],['Including GST',money(total)],['Synced to BUSY',written+' / '+rows.length]];
+    },
+    detail:async r=>{
+      const d=await Api.request('/mobile-sales/'+encodeURIComponent(r.id));
+      const inv=d.invoice;
+      return `<h2>${esc(inv.party_name||'Walk-in customer')}</h2><p>${esc(inv.branch_name||'')} · ${dateFmt(inv.business_date)} · ${title(inv.payment_mode)}${inv.busy_voucher_number?' · Invoice #'+esc(inv.busy_voucher_number):''}</p>
+      <div class="table"><table><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead><tbody>${(inv.lines||[]).map(l=>`<tr><td>${esc(l.item_name)}</td><td class="num">${esc(l.quantity)}</td><td class="num">${money(l.unit_rate_before_tax)}</td><td class="num">${money(l.taxable_amount)}</td></tr>`).join('')}</tbody></table></div>`;
+    }
+  },
+  purchases:{
+    label:'Purchases',
+    statuses:[['draft','Draft'],['ready','Ready'],['exported','Exported'],['cancelled','Cancelled']],
+    columns:[
+      {h:'Date',w:70},{h:'Branch',w:60},{h:'PO number',w:110},{h:'Supplier',w:160},
+      {h:'Lines',w:50,num:true},{h:'Status',w:90},{h:'Naming',w:70},{h:'Estimated value',w:110,num:true}
+    ],
+    row:r=>[dateFmt(r.created_at),esc(r.branch_code),esc(r.po_number),esc(r.supplier_name||'—'),
+      Number(r.item_count||0),pill(r.status,title(r.status)),title(r.naming_preference||'—'),money(r.estimated_value)],
+    summary:rows=>{
+      const total=rows.reduce((s,r)=>s+Number(r.estimated_value||0),0);
+      const exported=rows.filter(r=>r.status==='exported').length;
+      return [['Orders',rows.length],['Estimated value',money(total)],['Exported',exported+' / '+rows.length]];
+    },
+    detail:async r=>{
+      const d=await Api.request('/purchase-orders/'+encodeURIComponent(r.id));
+      const po=d.purchaseOrder;
+      return `<h2>${esc(po.po_number)}</h2><p>${esc(po.branch_name||'')} · ${esc(po.supplier_name||'No supplier set')} · ${title(po.status)}</p>
+      <div class="table"><table><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th></tr></thead><tbody>${(po.items||[]).map(i=>`<tr><td>${esc(i.tagro_name||i.canonical_part_number)}</td><td class="num">${esc(i.quantity)}</td><td class="num">${money(i.retail_price)}</td></tr>`).join('')}</tbody></table></div>
+      <p class="integration-note">Open <a href="app-purchase-orders.html">Purchase Orders</a> to edit or export this order.</p>`;
+    }
+  },
+  estimates:{
+    label:'Estimates',
+    statuses:[['draft','Draft'],['sent','Sent'],['approved','Approved'],['rejected','Rejected']],
+    columns:[
+      {h:'Date',w:70},{h:'Branch',w:60},{h:'Estimate #',w:100},{h:'Work order',w:90},{h:'Customer',w:150},
+      {h:'Status',w:90},{h:'Before GST',w:90,num:true},{h:'Grand total',w:100,num:true}
+    ],
+    row:r=>[dateFmt(r.created_at),esc(r.branch_code),esc(r.estimate_number),esc(r.work_order),esc(r.customer_name||'—'),
+      pill(r.status,title(r.status)),money(r.subtotal),money(r.grand_total)],
+    summary:rows=>{
+      const total=rows.reduce((s,r)=>s+Number(r.grand_total||0),0);
+      const approved=rows.filter(r=>r.status==='approved').length;
+      return [['Estimates',rows.length],['Grand total',money(total)],['Approved',approved+' / '+rows.length]];
+    },
+    detail:async r=>{
+      return `<h2>${esc(r.estimate_number)}</h2><p>${esc(r.customer_name||'')} · ${esc(r.work_order)} · ${title(r.status)}</p>
+      <p class="integration-note">Open <a href="app-jobs.html">Workbench</a> and find work order ${esc(r.work_order)} to view or edit line items.</p>`;
+    }
+  }
+};
+
+function pill(status,label){return `<span class="pill pill-${esc(status)}">${esc(label)}</span>`}
+
+addEventListener('DOMContentLoaded',boot);
+
+async function boot(){
+  session=await Session.restore();
+  if(!session){location.replace('login.html');return}
+  if(String(session.role).toLowerCase()==='owner'){
+    $('field-branch').classList.remove('hidden');
+    await loadBranches();
+  }
+  const today=new Date().toISOString().slice(0,10);
+  const monthStart=today.slice(0,7)+'-01';
+  $('from').value=monthStart;$('to').value=today;
+  bind();
+  renderTabUI();
+  await load();
+}
+
+async function loadBranches(){
+  try{
+    const data=await Api.request('/branches');
+    branches=(data.branches||[]).filter(b=>b.active);
+    $('branch').innerHTML='<option value="all">All branches</option>'+branches.map(b=>`<option value="${esc(b.id)}">${esc(b.code+' · '+b.name)}</option>`).join('');
+  }catch(error){Toast.show(error.message)}
+}
+
+function bind(){
+  $('tabs').addEventListener('click',e=>{
+    const btn=e.target.closest('.txn-tab');if(!btn)return;
+    kind=btn.dataset.kind;
+    [...$('tabs').children].forEach(b=>b.classList.toggle('active',b===btn));
+    renderTabUI();
+    $('detail').classList.add('hidden');
+    load();
+  });
+  $('branch').onchange=load;
+  $('status').onchange=load;
+  $('from').onchange=load;
+  $('to').onchange=load;
+  let timer;
+  $('q').oninput=()=>{clearTimeout(timer);timer=setTimeout(load,350)};
+}
+
+function renderTabUI(){
+  const def=KINDS[kind];
+  $('status').innerHTML='<option value="">All statuses</option>'+def.statuses.map(([v,l])=>`<option value="${esc(v)}">${esc(l)}</option>`).join('');
+  $('thead').innerHTML='<tr>'+def.columns.map(c=>`<th${c.num?' class="num"':''}>${esc(c.h)}</th>`).join('')+'</tr>';
+}
+
+function endpointFor(kindId){
+  return {sales:'/mobile-sales',purchases:'/purchase-orders',estimates:'/estimates'}[kindId];
+}
+function keyFor(kindId){
+  return {sales:'invoices',purchases:'purchaseOrders',estimates:'estimates'}[kindId];
+}
+
+async function load(){
+  const def=KINDS[kind];
+  const p=new URLSearchParams();
+  const branchVal=$('branch').value;
+  if(!$('field-branch').classList.contains('hidden') && branchVal){
+    if(kind==='purchases'){ if(branchVal!=='all') p.set('branch',branchVal); } // PO endpoint has no branch filter for owner besides implicit; scoped server-side
+    else p.set('branchId',branchVal);
+  }
+  if($('status').value)p.set('status',$('status').value);
+  if($('from').value)p.set('from',$('from').value);
+  if($('to').value)p.set('to',$('to').value);
+  if($('q').value)p.set('q',$('q').value);
+  p.set('limit','300');
+  try{
+    const data=await Api.request(endpointFor(kind)+'?'+p);
+    let rows=data[keyFor(kind)]||[];
+    // Purchase orders endpoint has no server-side date range / branch filter for owner beyond role scoping -- apply client-side for consistency with the other two tabs.
+    if(kind==='purchases'){
+      if($('from').value)rows=rows.filter(r=>String(r.created_at).slice(0,10)>=$('from').value);
+      if($('to').value)rows=rows.filter(r=>String(r.created_at).slice(0,10)<=$('to').value);
+      if($('status').value)rows=rows.filter(r=>r.status===$('status').value);
+      if($('q').value){const q=$('q').value.toLowerCase();rows=rows.filter(r=>(r.po_number+' '+(r.supplier_name||'')).toLowerCase().includes(q))}
+      if(!$('field-branch').classList.contains('hidden')&&branchVal&&branchVal!=='all')rows=rows.filter(r=>r.branch_id===branchVal);
+    }
+    rowsData=rows;
+    renderSummary(def,rows);
+    renderRows(def,rows);
+  }catch(error){Toast.show(error.message)}
+}
+
+function renderSummary(def,rows){
+  $('summary').innerHTML=def.summary(rows).map(([label,value])=>`<span>${esc(label)}<b>${value}</b></span>`).join('');
+}
+
+function renderRows(def,rows){
+  if(!rows.length){$('rows').innerHTML=`<tr class="empty-row"><td colspan="${def.columns.length}">No ${def.label.toLowerCase()} found for this filter.</td></tr>`;return}
+  $('rows').innerHTML=rows.map((r,i)=>'<tr data-i="'+i+'">'+def.row(r).map((cell,ci)=>`<td${def.columns[ci].num?' class="num"':''}>${cell}</td>`).join('')+'</tr>').join('');
+  [...$('rows').querySelectorAll('tr[data-i]')].forEach(tr=>tr.addEventListener('click',()=>openDetail(rowsData[Number(tr.dataset.i)])));
+}
+
+async function openDetail(row){
+  const def=KINDS[kind];
+  $('detail').classList.remove('hidden');
+  $('detail').innerHTML='Loading…';
+  try{
+    $('detail').innerHTML=await def.detail(row);
+  }catch(error) {
+    $('detail').innerHTML=`<p>${esc(error.message)}</p>`;
+  }
+  $('detail').scrollIntoView({behavior:'smooth'});
+}
+</script>
+</body>
+</html>

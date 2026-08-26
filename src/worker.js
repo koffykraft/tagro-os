@@ -322,6 +322,12 @@ async function routeApi(request, env, url) {
     return updatePurchaseOrder(request, env, session, decodeURIComponent(purchaseOrderMatch[1]));
   }
 
+  if (url.pathname === '/api/estimates' && request.method === 'GET') {
+    const session = await getSession(request, env);
+    if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
+    return listJobEstimates(env, session, url);
+  }
+
   const catalogMatch = url.pathname.match(/^\/api\/catalog\/([^/]+)$/);
   if (catalogMatch && request.method === 'PUT') {
     const session = await getSession(request, env);
@@ -4588,6 +4594,54 @@ async function addRepairJobEvent(request, env, session, id) {
   }
   await env.DB.batch(statements);
   return getRepairJob(env, session, jobId);
+}
+
+const JOB_ESTIMATE_STATUSES = new Set(['draft', 'sent', 'approved', 'rejected']);
+
+// Cross-job estimate listing for the Transactions page. Per-job estimate detail
+// (getJobEstimate below) already existed for the work-order flow; this is the first
+// place estimates are surfaced as a branch-wide list rather than one job at a time.
+async function listJobEstimates(env, session, url) {
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 100, 1), 300);
+  let branchId = session.branch_id;
+  if (hasRole(session, 'owner')) {
+    const requested = cleanText(url.searchParams.get('branchId'), 80);
+    if (requested === 'all') branchId = null;
+    else if (requested) branchId = requested;
+  }
+  const status = cleanText(url.searchParams.get('status'), 20).toLowerCase();
+  const from = cleanText(url.searchParams.get('from'), 10);
+  const to = cleanText(url.searchParams.get('to'), 10);
+  const q = cleanText(url.searchParams.get('q'), 120);
+
+  const conditions = [];
+  const values = [];
+  if (branchId) { conditions.push('j.branch_id = ?'); values.push(branchId); }
+  if (status && JOB_ESTIMATE_STATUSES.has(status)) { conditions.push('e.status = ?'); values.push(status); }
+  if (from) { conditions.push('date(e.created_at) >= date(?)'); values.push(from); }
+  if (to) { conditions.push('date(e.created_at) <= date(?)'); values.push(to); }
+  if (q) {
+    conditions.push('(e.estimate_number LIKE ? OR j.work_order LIKE ? OR c.name LIKE ?)');
+    const like = '%' + q + '%';
+    values.push(like, like, like);
+  }
+  values.push(limit);
+
+  const result = await env.DB.prepare(
+    `SELECT e.id, e.job_id, e.estimate_number, e.status, e.subtotal, e.tax_total,
+      e.grand_total, e.created_at, e.updated_at,
+      j.work_order, j.branch_id, b.code AS branch_code, b.name AS branch_name,
+      c.name AS customer_name, c.phone AS customer_phone,
+      s.name AS created_by_name
+     FROM job_estimates e
+     JOIN repair_jobs j ON j.id = e.job_id
+     JOIN branches b ON b.id = j.branch_id
+     JOIN customers c ON c.id = j.customer_id
+     JOIN staff s ON s.id = e.created_by
+     ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''}
+     ORDER BY e.created_at DESC LIMIT ?`
+  ).bind(...values).all();
+  return json({ ok: true, estimates: result.results || [] });
 }
 
 async function getJobEstimate(env, session, id) {

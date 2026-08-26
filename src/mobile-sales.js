@@ -20,6 +20,7 @@
 // state code, and every existing branch is Kerala anyway.
 
 const PAYMENT_MODES = new Set(['cash', 'upi', 'card', 'bank', 'credit', 'mixed']);
+const PAYMENT_STATUS_FILTERS = new Set(['queued', 'processing', 'written', 'failed', 'cancelled']);
 const KERALA_GST_STATE_CODE = '32';
 // Standard 15-char GSTIN: 2-digit state code, 10-char PAN (5 letters, 4 digits, 1
 // letter), 1-char entity number, literal 'Z', 1-char checksum. This checks shape
@@ -35,7 +36,7 @@ const VALID_GST_STATE_CODES = new Set([
 ]);
 
 export async function listMobileSales(env, session, url) {
-  const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 200);
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 300);
   let branchId = session.branch_id;
   if (hasRole(session, 'owner')) {
     const requested = cleanText(url.searchParams.get('branchId'), 80);
@@ -45,18 +46,35 @@ export async function listMobileSales(env, session, url) {
   const conditions = [];
   const values = [];
   if (branchId) { conditions.push('msi.branch_id = ?'); values.push(branchId); }
+  // 'date' is kept for existing callers (e.g. an exact single business date); 'from'/'to'
+  // are additive for range queries (the Transactions page's date-range filter).
   const businessDate = cleanText(url.searchParams.get('date'), 10);
   if (businessDate) { conditions.push('msi.business_date = ?'); values.push(businessDate); }
+  const from = cleanText(url.searchParams.get('from'), 10);
+  if (from) { conditions.push('msi.business_date >= ?'); values.push(from); }
+  const to = cleanText(url.searchParams.get('to'), 10);
+  if (to) { conditions.push('msi.business_date <= ?'); values.push(to); }
+  const status = cleanText(url.searchParams.get('status'), 20).toLowerCase();
+  if (status && PAYMENT_STATUS_FILTERS.has(status)) { conditions.push('msi.status = ?'); values.push(status); }
+  const q = cleanText(url.searchParams.get('q'), 120);
+  if (q) {
+    conditions.push('(msi.party_name LIKE ? OR msi.busy_voucher_number LIKE ? OR msi.id LIKE ?)');
+    const like = '%' + q + '%';
+    values.push(like, like, like);
+  }
   values.push(limit);
   const where = conditions.length ? ('WHERE ' + conditions.join(' AND ')) : '';
   const result = await env.DB.prepare(
     'SELECT msi.id, msi.branch_id, b.code AS branch_code, b.name AS branch_name, ' +
     'msi.business_date, msi.party_name, msi.party_phone, msi.payment_mode, ' +
     'msi.taxable_total, msi.cgst_total, msi.sgst_total, msi.igst_total, ' +
-    'msi.round_off, msi.grand_total, msi.status, msi.created_at ' +
+    'msi.round_off, msi.grand_total, msi.status, msi.busy_voucher_number, msi.busy_series, ' +
+    'msi.failure_reason, msi.created_at, msi.processed_at, s.name AS created_by_name, ' +
+    '(SELECT COUNT(*) FROM mobile_sales_invoice_lines l WHERE l.invoice_id = msi.id) AS line_count ' +
     'FROM mobile_sales_invoices msi ' +
     'JOIN branches b ON b.id = msi.branch_id ' +
-    where + ' ORDER BY msi.created_at DESC LIMIT ?'
+    'JOIN staff s ON s.id = msi.created_by ' +
+    where + ' ORDER BY msi.business_date DESC, msi.created_at DESC LIMIT ?'
   ).bind(...values).all();
   return json({ ok: true, invoices: result.results || [] });
 }
