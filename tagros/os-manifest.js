@@ -2,6 +2,18 @@ const TAGRO_MANIFEST = {
   api: '/api',
   version: '1.0.0',
   build: '2026-06-white',
+  workspacePlanes: [
+    { id:'sell', label:'Sell', appId:'billing', route:'billing-mobile.html', preserves:['customer','cart'] },
+    { id:'machines', label:'Machines', appId:'machines', route:'app-machines.html', preserves:['customer','machine','cart'] },
+    { id:'model-parts', label:'Model parts', appId:'catalog', route:'app-catalog.html', preserves:['customer','machine','model','cart'] },
+    { id:'parts-selection', label:'Parts selection', appId:'catalog', route:'app-catalog.html', preserves:['customer','machine','model','selectedParts','cart'] },
+    { id:'cart', label:'Cart', appId:'billing', route:'billing-mobile.html', preserves:['customer','machine','selectedParts','cart'] },
+    { id:'move-item', label:'Move item', appId:'jobs', route:'app-jobs.html', preserves:['customer','machine','job','selectedParts','cart'] },
+    { id:'tile-configuration', label:'Tile configuration', appId:'settings', route:'index.html#settings', preserves:['staff','branch'] },
+    { id:'billing-handoff', label:'Billing handoff', appId:'billing', route:'billing-mobile.html', preserves:['customer','machine','job','selectedParts','cart'] },
+    { id:'service-handoff', label:'Service handoff', appId:'receive', route:'receive.html', preserves:['customer','machine','job','selectedParts'] },
+    { id:'reorder', label:'Reorder and purchase review', appId:'purchase-orders', route:'app-purchase-orders.html', states:['reorder','purchase-review'], preserves:['branch','selectedParts','cart'] }
+  ],
   apps: [
     { id:'home', label:'My Space', navIcon:'⌂', navigation:['desktop','mobile-core','mobile-receive'], description:'Personal workshop home', file:'index.html', enabled:true, ready:true, launcher:false, access:{roles:['all']} },
     { id:'receive', label:'Receive', navIcon:'＋', navigation:['desktop','mobile-core','mobile-receive'], description:'Receive a machine for service', file:'receive.html', enabled:true, ready:true, launcher:false, access:{roles:['all']} },
@@ -23,6 +35,8 @@ const TAGRO_MANIFEST = {
     if (!app?.enabled || !session) return false;
     const role = String(session.role || 'staff').toLowerCase();
     return app.access.roles.includes('all') || app.access.roles.includes(role);
-  }
+  },
+  plane(id) { return this.workspacePlanes.find(plane => plane.id === id) || null; },
+  planeForApp(appId) { return this.workspacePlanes.find(plane => plane.appId === appId) || null; }
 };
 globalThis.TAGRO_MANIFEST = TAGRO_MANIFEST;

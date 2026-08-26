@@ -10,32 +10,6 @@ const WorkOrderForm={
       this.parts=[];this.renderParts();this.setState('Accept first. Inspection, parts and billing come later.','');
     }
   },
-  async consumePartsHandoff(){
-    if(this.mode!=='edit'||!this.id)return false;
-    const key=`tagro_parts_handoff_${this.id}`;
-    const incoming=OS.get(key,[]);
-    if(!Array.isArray(incoming)||!incoming.length)return false;
-    for(const part of incoming){
-      if(!part?.partNumber||!part?.itemName)continue;
-      const existing=this.parts.find(item=>item.partNumber===part.partNumber&&!item.draft);
-      if(existing){
-        existing.quantity=Number(existing.quantity||0)+Number(part.quantity||1);
-        if(part.unitPrice!==''&&part.unitPrice!=null)existing.unitPrice=part.unitPrice;
-      }else{
-        this.parts.push({
-          partNumber:part.partNumber,itemName:part.itemName,quantity:Number(part.quantity)||1,
-          unitPrice:part.unitPrice??'',hsnSac:part.hsnSac||'',gstRate:part.gstRate??'',
-          notes:part.notes||'',source:part.source||'parts_master',draft:false
-        });
-      }
-    }
-    this.renderParts();
-    const saved=await this.save(false);
-    if(!saved)return false;
-    OS.del(key);
-    Toast.show(`${incoming.length} selected part${incoming.length===1?'':'s'} added to this job.`);
-    return true;
-  },
   bind(){
     document.getElementById('add-part').addEventListener('click',()=>document.dispatchEvent(new CustomEvent('tagro:open-parts')));
     document.getElementById('customer-search').addEventListener('input',ServiceUI.debounce(()=>this.searchCustomers(),300));
@@ -122,15 +96,14 @@ const WorkOrderForm={
     }
   },
   async save(explicit){
-    if(this.saving){this.queued=true;return false}
+    if(this.saving){this.queued=true;return}
     this.saving=true;this.setState('Saving…','');
     try{
       const data=await Api.request('/work-orders/'+encodeURIComponent(this.id),{method:'PUT',body:JSON.stringify(this.payload())});
       this.order=data.workOrder;this.customerId=data.workOrder.customerId;this.setState('Saved '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}),'good');
       document.dispatchEvent(new CustomEvent('tagro:work-order-saved',{detail:{workOrder:data.workOrder}}));
       if(explicit)Toast.show('Work order saved.');
-      return true;
-    }catch(error){this.setState(error.message,'bad');return false}
+    }catch(error){this.setState(error.message,'bad')}
     finally{this.saving=false;if(this.queued){this.queued=false;this.save(false)}}
   },
   setState(message,kind){

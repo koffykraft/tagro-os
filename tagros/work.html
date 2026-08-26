@@ -129,7 +129,12 @@
           <section class="workspace-card parts-reference-card" id="parts-reference">
             <div class="workspace-card-head">
               <div><span class="card-mark orange">P</span><h2>Find a part</h2></div>
+              <span id="bench-parts-model">Loading model</span>
               <button class="parts-sheet-close" id="close-parts-sheet" type="button" aria-label="Close parts search">×</button>
+            </div>
+            <div class="common-parts-block">
+              <div class="bench-subhead"><strong>Common parts</strong><span>Tap to add</span></div>
+              <div class="common-parts" id="common-model-parts"><div class="workspace-loading">Loading parts…</div></div>
             </div>
             <div class="bench-parts-search">
               <input class="control" id="bench-part-query" type="search" autocomplete="off" placeholder="TAGRO part name, alias or number">
@@ -139,8 +144,11 @@
               <div class="workspace-empty">Type a familiar part name to see price and add it.</div>
             </div>
             <div class="reference-actions">
-              <button id="open-parts-search" type="button">Search parts</button>
+              <button id="open-parts-search" type="button">More parts</button>
+              <button id="open-visual-reference" type="button">Diagram</button>
+              <a id="model-reference-link" href="app-catalog.html">STIHL reference</a>
             </div>
+            <a id="global-parts-link" href="app-catalog.html" hidden>STIHL reference</a>
           </section>
 
           <section class="workspace-card frequent-parts-card">
@@ -286,6 +294,37 @@
     </form>
   </dialog>
 
+  <dialog class="workspace-dialog parts-dialog" id="parts-dialog">
+    <div class="workspace-dialog-card">
+      <div class="workspace-dialog-head">
+        <div><p class="eyebrow">Current job remains open</p><h2>Parts for <span id="parts-model-title">this machine</span></h2></div>
+        <button class="dialog-close" data-close-dialog="parts-dialog" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="parts-context-row">
+        <span class="parts-context-chip">Adding to <strong id="parts-destination">current work order</strong></span>
+        <a class="outline-button" id="open-global-parts" href="app-catalog.html">Global parts</a>
+      </div>
+      <label class="parts-model-control">Bench model
+        <select class="control" id="parts-model-select" aria-label="Bench machine model"></select>
+      </label>
+      <div class="parts-mode-toggle" role="group" aria-label="Parts selection mode">
+        <button class="active" id="parts-fast-mode" type="button">Fast price &amp; add</button>
+        <button id="parts-visual-mode" type="button">Visual diagrams</button>
+      </div>
+      <div id="parts-visual-tools" hidden>
+        <a class="outline-button parts-diagram-link" id="parts-diagram-link" href="#" target="_blank" rel="noopener" hidden>Open exploded parts diagram</a>
+        <div class="assembly-carousel" id="parts-assembly-carousel" aria-label="Machine assemblies"></div>
+      </div>
+      <div class="parts-search-bar">
+        <input class="control" id="parts-query" type="search" autocomplete="off" enterkeyhint="search" placeholder="TAGRO name, alias or part number">
+        <button class="workspace-primary" id="parts-search-button" type="button">Search</button>
+      </div>
+      <div class="parts-search-results" id="parts-search-results">
+        <div class="workspace-empty">Loading this machine's assemblies…</div>
+      </div>
+    </div>
+  </dialog>
+
   <dialog class="workspace-dialog switch-dialog" id="switch-dialog">
     <div class="workspace-dialog-card">
       <div class="workspace-dialog-head">
@@ -320,7 +359,6 @@
     if(!id){location.replace('app-jobs.html');return}
     try{
       await WorkOrderForm.mount({mode:'edit',id,session});
-      await WorkOrderForm.consumePartsHandoff();
       await JobWorkspace.mount({session,id,order:WorkOrderForm.order});
     }catch(error){
       document.getElementById('save-state').textContent=error.message;
