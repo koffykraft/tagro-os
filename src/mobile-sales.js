@@ -7,9 +7,11 @@
 // delete, whether tax already reported, etc.) that shouldn't be guessed at; flagged
 // as a fast-follow if it's needed rather than built speculatively here.
 //
-// Money handling: every line's price and GST rate is re-read from catalog_items on
-// the server, never trusted from the client -- the client only supplies which item
-// and how many. Tax split (CGST+SGST vs IGST) is inferred from the customer's GSTIN
+// Money handling: every line's price and GST rate is re-read on the server, never
+// trusted from the client -- the client only supplies which item and how many. A
+// line either resolves against the local `catalog_items` table (real id) or, for an
+// `official:<partNumber>` id (a part not yet imported into catalog_items), directly
+// against the TAGRO_DATA KV master price list -- see resolvePartForSale(). Tax split (CGST+SGST vs IGST) is inferred from the customer's GSTIN
 // state code versus Kerala's ("32"): TAGRO's branches are all in Kerala today, so any
 // sale with no GSTIN or a Kerala GSTIN is treated as intra-state (CGST+SGST); any
 // other state's GSTIN is treated as inter-state (IGST). If TAGRO ever opens a branch
@@ -88,6 +90,7 @@ export async function createMobileSale(request, env, session) {
   const suppliedDate = cleanText(body.businessDate, 10);
   const businessDate = /^\d{4}-\d{2}-\d{2}$/.test(suppliedDate) ? suppliedDate : new Date().toISOString().slice(0, 10);
 
+  const interState = Boolean(partyGstin) && partyGstin.slice(0, 2) !== KERALA_GST_STATE_CODE;
   const lineItems = [];
   for (const raw of rawLines) {
     const catalogItemId = cleanText(raw && raw.catalogItemId, 100);
@@ -95,31 +98,30 @@ export async function createMobileSale(request, env, session) {
     if (!catalogItemId || !Number.isFinite(quantity) || quantity <= 0) {
       return json({ ok: false, error: 'Each line needs a valid item and quantity.' }, 400);
     }
-    const item = await env.DB.prepare(
-      'SELECT id, part_number, item_name, hsn_sac, gst_rate, retail_price FROM catalog_items WHERE id = ? AND active = 1'
-    ).bind(catalogItemId).first();
-    if (!item) return json({ ok: false, error: 'Item not found: ' + catalogItemId }, 400);
-    const unitPrice = Number(item.retail_price) || 0;
-    const gstRate = Number(item.gst_rate) || 0;
-    const lineSubtotal = round2(unitPrice * quantity);
+    const resolved = await resolvePartForSale(env, catalogItemId);
+    if (!resolved) return json({ ok: false, error: 'Item not found: ' + catalogItemId }, 400);
+    const unitPrice = Number(resolved.unitPrice) || 0;
+    const gstRate = Number(resolved.gstRate) || 0;
+    const taxableAmount = round2(unitPrice * quantity);
+    const lineTax = round2(taxableAmount * gstRate / 100);
+    let cgstAmount = 0, sgstAmount = 0, igstAmount = 0;
+    if (interState) {
+      igstAmount = lineTax;
+    } else {
+      cgstAmount = round2(lineTax / 2);
+      sgstAmount = round2(lineTax - cgstAmount);
+    }
+    const lineTotal = round2(taxableAmount + cgstAmount + sgstAmount + igstAmount);
     lineItems.push({
-      catalogItemId: item.id, partNumber: item.part_number, itemName: item.item_name,
-      hsnSac: item.hsn_sac, gstRate, quantity, unitPrice, lineSubtotal
+      partNumber: resolved.partNumber, itemName: resolved.itemName, source: resolved.source,
+      gstRate, quantity, unitPrice, taxableAmount, cgstAmount, sgstAmount, igstAmount, lineTotal
     });
   }
 
-  const taxableTotal = round2(lineItems.reduce((sum, line) => sum + line.lineSubtotal, 0));
-  const interState = Boolean(partyGstin) && partyGstin.slice(0, 2) !== KERALA_GST_STATE_CODE;
-  let cgstTotal = 0, sgstTotal = 0, igstTotal = 0;
-  for (const line of lineItems) {
-    const lineTax = round2(line.lineSubtotal * line.gstRate / 100);
-    if (interState) {
-      igstTotal = round2(igstTotal + lineTax);
-    } else {
-      cgstTotal = round2(cgstTotal + lineTax / 2);
-      sgstTotal = round2(sgstTotal + lineTax / 2);
-    }
-  }
+  const taxableTotal = round2(lineItems.reduce((sum, line) => sum + line.taxableAmount, 0));
+  const cgstTotal = round2(lineItems.reduce((sum, line) => sum + line.cgstAmount, 0));
+  const sgstTotal = round2(lineItems.reduce((sum, line) => sum + line.sgstAmount, 0));
+  const igstTotal = round2(lineItems.reduce((sum, line) => sum + line.igstAmount, 0));
   const rawGrandTotal = taxableTotal + cgstTotal + sgstTotal + igstTotal;
   const grandTotal = Math.round(rawGrandTotal);
   const roundOff = round2(grandTotal - rawGrandTotal);
@@ -138,23 +140,25 @@ export async function createMobileSale(request, env, session) {
       roundOff, grandTotal, now
     )
   ];
-  for (const line of lineItems) {
+  lineItems.forEach((line, index) => {
     statements.push(env.DB.prepare(
       'INSERT INTO mobile_sales_invoice_lines ' +
-      '(id, invoice_id, catalog_item_id, part_number, item_name, hsn_sac, gst_rate, ' +
-      'quantity, unit_price, line_subtotal, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      '(id, invoice_id, line_number, item_name, part_number, quantity, unit, unit_rate_before_tax, ' +
+      'discount, taxable_amount, gst_rate, cgst_amount, sgst_amount, igst_amount, line_total, source) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)'
     ).bind(
-      makeId('invline'), id, line.catalogItemId, line.partNumber, line.itemName, line.hsnSac,
-      line.gstRate, line.quantity, line.unitPrice, line.lineSubtotal, now
+      makeId('invline'), id, index + 1, line.itemName, line.partNumber, line.quantity, 'Nos',
+      line.unitPrice, line.taxableAmount, line.gstRate, line.cgstAmount, line.sgstAmount, line.igstAmount,
+      line.lineTotal, line.source
     ));
-  }
+  });
 
   const queuePayload = {
     invoiceId: id, branchCode: branch.code, businessDate, partyName, partyPhone, partyGstin,
     paymentMode, taxableTotal, cgstTotal, sgstTotal, igstTotal, roundOff, grandTotal,
     lines: lineItems.map(line => ({
-      partNumber: line.partNumber, itemName: line.itemName, hsnSac: line.hsnSac,
-      gstRate: line.gstRate, quantity: line.quantity, unitPrice: line.unitPrice
+      partNumber: line.partNumber, itemName: line.itemName, source: line.source,
+      gstRate: line.gstRate, quantity: line.quantity, unitPrice: line.unitPrice, lineTotal: line.lineTotal
     }))
   };
   const payloadJson = JSON.stringify(queuePayload);
@@ -185,10 +189,52 @@ async function loadInvoice(env, id) {
   ).bind(id).first();
   if (!invoice) return null;
   const lines = await env.DB.prepare(
-    'SELECT id, catalog_item_id, part_number, item_name, hsn_sac, gst_rate, quantity, unit_price, line_subtotal ' +
-    'FROM mobile_sales_invoice_lines WHERE invoice_id = ? ORDER BY rowid'
+    'SELECT id, line_number, part_number, item_name, quantity, unit, unit_rate_before_tax, discount, ' +
+    'taxable_amount, gst_rate, cgst_amount, sgst_amount, igst_amount, line_total, source ' +
+    'FROM mobile_sales_invoice_lines WHERE invoice_id = ? ORDER BY line_number'
   ).bind(id).all();
   return Object.assign({}, invoice, { lines: lines.results || [] });
+}
+
+async function resolvePartForSale(env, catalogItemId) {
+  if (catalogItemId.indexOf('official:') === 0) {
+    if (!env.TAGRO_DATA) return null;
+    const wanted = normalizePartNumber(catalogItemId.slice('official:'.length));
+    if (!wanted) return null;
+    const master = await env.TAGRO_DATA.get('parts:master', { type: 'json' });
+    if (!Array.isArray(master)) return null;
+    for (const part of master) {
+      const rawPartNumber = cleanText(part && (part.no || part.partNumber || part.id), 100).toUpperCase();
+      if (normalizePartNumber(rawPartNumber) !== wanted) continue;
+      const tagroName = cleanText(part && (part.tagroName || part.name), 240);
+      const stihlName = cleanText(part && part.stihlName, 240);
+      const itemName = tagroName || stihlName;
+      const retailPrice = optionalNumber(part && (part.retail != null ? part.retail : part.price));
+      if (!itemName || !retailPrice || retailPrice <= 0) return null;
+      return {
+        source: 'tagro_parts_master', partNumber: rawPartNumber, itemName,
+        gstRate: optionalNumber(part && part.gst) || 0, unitPrice: retailPrice
+      };
+    }
+    return null;
+  }
+  const item = await env.DB.prepare(
+    'SELECT id, part_number, item_name, gst_rate, retail_price FROM catalog_items WHERE id = ? AND active = 1'
+  ).bind(catalogItemId).first();
+  if (!item) return null;
+  return {
+    source: 'catalog_items', partNumber: item.part_number, itemName: item.item_name,
+    gstRate: Number(item.gst_rate) || 0, unitPrice: Number(item.retail_price) || 0
+  };
+}
+
+function normalizePartNumber(value) {
+  return cleanText(value, 100).toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function optionalNumber(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
 }
 
 function round2(value) {
