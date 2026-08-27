@@ -114,7 +114,7 @@ async function routeApi(request, env, url) {
     return json({ ok: true }, 200, { 'Set-Cookie': expiredSessionCookie(env) });
   }
 
-  if (url.pathname.startsWith('/api/warehouse/') || url.pathname.startsWith('/api/stock-count/')) {
+  if (url.pathname.startsWith('/api/warehouse/') || url.pathname.startsWith('/api/stock-count/') || url.pathname.startsWith('/api/mobile-invoices')) {
     const session = await getSession(request, env);
     if (!session) return json({ ok: false, error: 'Session expired.' }, 401);
     if (!env.HISTORY_DB && url.pathname.startsWith('/api/warehouse/')) {

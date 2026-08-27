@@ -1,0 +1,9 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TAGRO Admin Invoice</title>
+<script>
+  const branch = new URLSearchParams(location.search).get('branch') || 'KVR';
+  location.replace(`../?admin=1&branch=${encodeURIComponent(branch)}`);
+</script>
+<p>Opening TAGRO Admin Invoice…</p>
